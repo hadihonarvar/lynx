@@ -158,9 +158,7 @@ class SQLiteStore:
             )
 
     def get_task(self, task_id: str) -> Task | None:
-        row = self._conn.execute(
-            "SELECT * FROM tasks WHERE id = ?", (task_id,)
-        ).fetchone()
+        row = self._conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
         if row is None:
             return None
         return Task(
@@ -197,9 +195,7 @@ class SQLiteStore:
             )
 
     def get_run(self, run_id: str) -> Run | None:
-        row = self._conn.execute(
-            "SELECT * FROM runs WHERE id = ?", (run_id,)
-        ).fetchone()
+        row = self._conn.execute("SELECT * FROM runs WHERE id = ?", (run_id,)).fetchone()
         if row is None:
             return None
         return Run(
@@ -264,9 +260,7 @@ class SQLiteStore:
             seq=row["seq"],
             model_call=ModelCall(**_de(row["model_call"])) if row["model_call"] else None,
             action=_deserialize_action(action_data) if action_data else None,
-            decision=_deserialize_decision(_de(row["decision"]))
-            if row["decision"]
-            else None,
+            decision=_deserialize_decision(_de(row["decision"])) if row["decision"] else None,
             result=ActionResult(**_de(row["result"])) if row["result"] else None,
             checkpoint_blob=row["checkpoint_blob"],
             started_at=datetime.fromisoformat(row["started_at"]),
@@ -388,9 +382,7 @@ class SQLiteStore:
         ).fetchone()
         return dict(row) if row else None
 
-    def find_completed_step_by_idempotency_key(
-        self, run_id: str, key: str
-    ) -> Step | None:
+    def find_completed_step_by_idempotency_key(self, run_id: str, key: str) -> Step | None:
         """Idempotency check: has an action with this key already succeeded?
 
         Used by the scheduler to avoid double-executing actions that completed

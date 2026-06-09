@@ -48,5 +48,4 @@ class Agent(Protocol):
     framework (see adapters/).
     """
 
-    async def step(self, conversation: list[Message]) -> AgentAction:
-        ...
+    async def step(self, conversation: list[Message]) -> AgentAction: ...

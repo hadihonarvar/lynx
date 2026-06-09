@@ -40,8 +40,7 @@ class OpenAIAgent:
                 from openai import AsyncOpenAI
             except ImportError as exc:
                 raise ImportError(
-                    "OpenAIAgent requires the 'openai' package. "
-                    "Install with: pip install openai"
+                    "OpenAIAgent requires the 'openai' package. Install with: pip install openai"
                 ) from exc
             client = AsyncOpenAI()
         self.client = client
@@ -89,9 +88,7 @@ def _tools_for_openai() -> list[dict[str, Any]]:
     return out
 
 
-def _to_openai_messages(
-    conversation: list[Message], system: str
-) -> list[dict[str, Any]]:
+def _to_openai_messages(conversation: list[Message], system: str) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     if system:
         out.append({"role": "system", "content": system})

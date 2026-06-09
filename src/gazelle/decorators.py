@@ -32,7 +32,9 @@ def tool(
             ...
     """
 
-    def decorator(fn: Callable[..., Coroutine[Any, Any, Any]]) -> Callable[..., Coroutine[Any, Any, Any]]:
+    def decorator(
+        fn: Callable[..., Coroutine[Any, Any, Any]],
+    ) -> Callable[..., Coroutine[Any, Any, Any]]:
         if not asyncio.iscoroutinefunction(fn):
             raise TypeError(
                 f"@tool requires async function; {fn.__name__} is sync. "

@@ -43,9 +43,7 @@ async def sql_shadow(query: str, conn: Any = None) -> dict[str, Any]:
         "note": "no real execution — sql_shadow analysis only",
     }
     if destructive and not has_where:
-        out["warning"] = (
-            f"{operation} without WHERE clause — would affect ALL rows in {tables}"
-        )
+        out["warning"] = f"{operation} without WHERE clause — would affect ALL rows in {tables}"
 
     if conn is not None:
         try:

@@ -56,9 +56,7 @@ class _Agent:
         for msg in conversation:
             if msg.role == "tool" and msg.name == "make_marker":
                 return FinalAnswer(text="done")
-        return ToolCall(
-            "make_marker", {"path": str(self.marker_path)}, call_id="c1"
-        )
+        return ToolCall("make_marker", {"path": str(self.marker_path)}, call_id="c1")
 
 
 async def test_approve_then_resume_executes_action(fresh):

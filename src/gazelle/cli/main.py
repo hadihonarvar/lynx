@@ -83,13 +83,13 @@ def init(directory: str) -> None:
     if not toml_path.exists():
         toml_path.write_text(
             "[storage]\n"
-            "type = \"sqlite\"\n"
-            "path = \".gazelle/state.db\"\n\n"
+            'type = "sqlite"\n'
+            'path = ".gazelle/state.db"\n\n'
             "[policy]\n"
-            "path = \"./policy.yaml\"\n\n"
+            'path = "./policy.yaml"\n\n'
             "[runtime]\n"
-            "default_environment = \"dev\"\n"
-            "default_workspace = \".\"\n"
+            'default_environment = "dev"\n'
+            'default_workspace = "."\n'
         )
         console.print(f"[green]✔[/] wrote {toml_path}")
 
@@ -127,9 +127,7 @@ def run(script: str, task: str | None, policy_path: str, env: str) -> None:
         if task is None:
             console.print("[red]✘[/] --task required when script provides only `agent`")
             raise SystemExit(1)
-        result = asyncio.run(
-            default_runtime.run(namespace["agent"], task=task, environment=env)
-        )
+        result = asyncio.run(default_runtime.run(namespace["agent"], task=task, environment=env))
     else:
         console.print("[red]✘[/] script must define `main()` or `agent`")
         raise SystemExit(1)
@@ -143,8 +141,7 @@ def run(script: str, task: str | None, policy_path: str, env: str) -> None:
         console.print(f"[bold]Final:[/] {result.final_answer}")
     if result.paused_approval_id:
         console.print(
-            f"[yellow]Paused for approval:[/] "
-            f"gazelle approve {result.paused_approval_id}"
+            f"[yellow]Paused for approval:[/] gazelle approve {result.paused_approval_id}"
         )
     if result.error:
         console.print(f"[red]Error:[/] {result.error}")
@@ -178,6 +175,7 @@ def resume(run_id: str, script: str, policy_path: str) -> None:
         # the convention that the demo defines.
         if "JanitorAgent" in namespace:
             from pathlib import Path as _P
+
             namespace["agent"] = namespace["JanitorAgent"](_P.cwd() / "demo-workspace")
         else:
             console.print(
@@ -192,9 +190,7 @@ def resume(run_id: str, script: str, policy_path: str) -> None:
     if result.final_answer:
         console.print(f"[bold]Final:[/] {result.final_answer}")
     if result.paused_approval_id:
-        console.print(
-            f"[yellow]Paused again at:[/] gazelle approve {result.paused_approval_id}"
-        )
+        console.print(f"[yellow]Paused again at:[/] gazelle approve {result.paused_approval_id}")
     if result.error:
         console.print(f"[red]Error:[/] {result.error}")
         raise SystemExit(2)
@@ -218,7 +214,12 @@ def ps(limit: int) -> None:
     for r in runs:
         if r is None:
             continue
-        table.add_row(r.id, str(r.status), r.started_at.isoformat(timespec="seconds"), str(r.last_step_seq + 1))
+        table.add_row(
+            r.id,
+            str(r.status),
+            r.started_at.isoformat(timespec="seconds"),
+            str(r.last_step_seq + 1),
+        )
     console.print(table)
 
 
@@ -273,7 +274,7 @@ def approvals() -> None:
             row["id"],
             row["run_id"],
             str(row["step_seq"]),
-            f'{action["tool"]}({_compact(action["args"])})',
+            f"{action['tool']}({_compact(action['args'])})",
         )
     console.print(table)
 

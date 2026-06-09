@@ -44,8 +44,7 @@ async def register_mcp_server(
         from mcp.client.stdio import StdioServerParameters, stdio_client
     except ImportError as exc:
         raise ImportError(
-            "register_mcp_server requires the 'mcp' package. "
-            "Install with: pip install mcp"
+            "register_mcp_server requires the 'mcp' package. Install with: pip install mcp"
         ) from exc
 
     params = (

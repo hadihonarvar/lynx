@@ -37,9 +37,7 @@ class Verdict(StrEnum):
     TRANSFORM = "transform"
 
 
-TERMINAL_STATUSES = frozenset(
-    {RunStatus.SUCCEEDED, RunStatus.FAILED, RunStatus.CANCELLED}
-)
+TERMINAL_STATUSES = frozenset({RunStatus.SUCCEEDED, RunStatus.FAILED, RunStatus.CANCELLED})
 
 
 # ---------------------------------------------------------------------------
@@ -320,9 +318,7 @@ def _default(o: Any) -> Any:
     raise TypeError(f"Cannot canonicalize {type(o).__name__}")
 
 
-def compute_idempotency_key(
-    run_id: str, seq: int, tool: str, args: dict[str, Any]
-) -> str:
+def compute_idempotency_key(run_id: str, seq: int, tool: str, args: dict[str, Any]) -> str:
     """Deterministic idempotency key for an action.
 
     Same (run_id, seq, tool, args) always produces the same key.

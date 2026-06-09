@@ -47,13 +47,9 @@ def enable_prometheus(port: int = 9100) -> None:
 
     global STEPS_TOTAL, STEP_DURATION, RUNS_TOTAL, ACTIONS_DROPPED
     STEPS_TOTAL = Counter("gazelle_steps_total", "Total steps by verdict", ["verdict"])
-    STEP_DURATION = Histogram(
-        "gazelle_step_duration_seconds", "Step duration", ["tool"]
-    )
+    STEP_DURATION = Histogram("gazelle_step_duration_seconds", "Step duration", ["tool"])
     RUNS_TOTAL = Counter("gazelle_runs_total", "Total runs by terminal status", ["status"])
-    ACTIONS_DROPPED = Counter(
-        "gazelle_actions_dropped_total", "Actions not executed", ["reason"]
-    )
+    ACTIONS_DROPPED = Counter("gazelle_actions_dropped_total", "Actions not executed", ["reason"])
     start_http_server(port)
     _prometheus_started = True
 

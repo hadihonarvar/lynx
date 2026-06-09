@@ -18,9 +18,7 @@ async def http_shadow(
     timeout: float | None = None,
 ) -> dict[str, Any]:
     parsed = urlparse(url)
-    body_size = (
-        len(body) if isinstance(body, bytes) else len(body.encode()) if body else 0
-    )
+    body_size = len(body) if isinstance(body, bytes) else len(body.encode()) if body else 0
 
     safe_method = method.upper()
     destructive = safe_method in {"DELETE", "PUT", "PATCH"}

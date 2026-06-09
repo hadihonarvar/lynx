@@ -166,10 +166,20 @@ class PostgresStore:
             id=r["id"],
             goal=r["goal"],
             created_at=r["created_at"],
-            created_by=Principal(**(r["created_by"] if isinstance(r["created_by"], dict) else json.loads(r["created_by"]))),
+            created_by=Principal(
+                **(
+                    r["created_by"]
+                    if isinstance(r["created_by"], dict)
+                    else json.loads(r["created_by"])
+                )
+            ),
             policy_bundle_id=r["policy_bundle_id"],
-            budget=Budget(**(r["budget"] if isinstance(r["budget"], dict) else json.loads(r["budget"]))),
-            metadata=r["metadata"] if isinstance(r["metadata"], dict) else json.loads(r["metadata"]),
+            budget=Budget(
+                **(r["budget"] if isinstance(r["budget"], dict) else json.loads(r["budget"]))
+            ),
+            metadata=r["metadata"]
+            if isinstance(r["metadata"], dict)
+            else json.loads(r["metadata"]),
         )
 
     # -----------------------------------------------------------------------

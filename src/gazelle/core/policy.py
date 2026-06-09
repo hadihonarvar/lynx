@@ -180,9 +180,9 @@ _MAX_REGEX_LENGTH = 1000
 # We don't try to catch every ReDoS — that requires automaton analysis. We
 # catch the classic shapes that almost certainly indicate a bug.
 _REGEX_DANGEROUS_PATTERNS = (
-    re.compile(r"\(\s*\\?[wWsSdD.]\s*[\*\+]\s*\)\s*[\*\+]"),    # (\w+)+, (.*)*, (.+)+
-    re.compile(r"\(\s*[a-zA-Z0-9]\s*[\*\+]\s*\)\s*[\*\+]"),    # (a+)+, (b*)*
-    re.compile(r"\(\s*([^)|]+)\s*\|\s*\1\s*\)\s*[\*\+]"),       # (a|a)+
+    re.compile(r"\(\s*\\?[wWsSdD.]\s*[\*\+]\s*\)\s*[\*\+]"),  # (\w+)+, (.*)*, (.+)+
+    re.compile(r"\(\s*[a-zA-Z0-9]\s*[\*\+]\s*\)\s*[\*\+]"),  # (a+)+, (b*)*
+    re.compile(r"\(\s*([^)|]+)\s*\|\s*\1\s*\)\s*[\*\+]"),  # (a|a)+
 )
 
 
@@ -252,9 +252,7 @@ def _compile_predicate(
     return lambda r, c, leaves=leaves: all(p(r, c) for p in leaves)
 
 
-def _compile_leaf(
-    key: str, value: Any
-) -> Callable[[ActionRequest, ExecutionContext], bool]:
+def _compile_leaf(key: str, value: Any) -> Callable[[ActionRequest, ExecutionContext], bool]:
     """Compile a single 'field' or 'field.operator' entry."""
     if "." in key:
         head, _, tail = key.rpartition(".")
@@ -273,30 +271,38 @@ def _operator_check(
         return lambda r, c: getter(r, c) == value
     if op == "matches":
         pat = _compile_safe_regex(value)
+
         def check(r: ActionRequest, c: ExecutionContext) -> bool:
             v = getter(r, c)
             return isinstance(v, str) and pat.search(v) is not None
+
         return check
     if op == "in":
         return lambda r, c: getter(r, c) in value
     if op == "contains":
+
         def check(r: ActionRequest, c: ExecutionContext) -> bool:
             v = getter(r, c)
             return v is not None and value in v
+
         return check
     if op == "contains_any":
+
         def check(r: ActionRequest, c: ExecutionContext) -> bool:
             v = getter(r, c)
             if v is None:
                 return False
             return any(item in v for item in value)
+
         return check
     if op == "contains_all":
+
         def check(r: ActionRequest, c: ExecutionContext) -> bool:
             v = getter(r, c)
             if v is None:
                 return False
             return all(item in v for item in value)
+
         return check
     if op in {"gt", "ge", "lt", "le"}:
         cmp = {
@@ -305,21 +311,27 @@ def _operator_check(
             "lt": lambda a, b: a < b,
             "le": lambda a, b: a <= b,
         }[op]
+
         def check(r: ActionRequest, c: ExecutionContext) -> bool:
             v = getter(r, c)
             return v is not None and cmp(v, value)
+
         return check
     if op == "between":
         lo, hi = value
+
         def check(r: ActionRequest, c: ExecutionContext) -> bool:
             v = getter(r, c)
             return v is not None and lo <= v <= hi
+
         return check
     if op == "not_between":
         lo, hi = value
+
         def check(r: ActionRequest, c: ExecutionContext) -> bool:
             v = getter(r, c)
             return v is not None and not (lo <= v <= hi)
+
         return check
     raise ValueError(f"Unknown operator: {op}")
 
@@ -350,9 +362,7 @@ def _compile_decision(
             matched_rules=(rule_id,),
             approvers=approvers,
             timeout_seconds=timeout,
-            transform_args=_apply_transform(transform_spec, req)
-            if transform_spec
-            else None,
+            transform_args=_apply_transform(transform_spec, req) if transform_spec else None,
         )
 
     return factory
@@ -365,9 +375,7 @@ def _simple_decision(
     return lambda r, c: Decision(verdict=v, matched_rules=(rule_id,))
 
 
-def _apply_transform(
-    spec: dict[str, Any], req: ActionRequest
-) -> dict[str, Any]:
+def _apply_transform(spec: dict[str, Any], req: ActionRequest) -> dict[str, Any]:
     """Apply a transform specification to args. Very small for MVP."""
     new_args = dict(req.args)
     target = spec.get("jsonpath", "$.args").removeprefix("$.args.")

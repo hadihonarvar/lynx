@@ -162,12 +162,8 @@ rules:
     decision: allow
         """
     )
-    d = evaluate(
-        bundle, _req(scope=("filesystem:read",), reversible=True), _ctx()
-    )
+    d = evaluate(bundle, _req(scope=("filesystem:read",), reversible=True), _ctx())
     assert d.verdict == Verdict.ALLOW
 
-    d2 = evaluate(
-        bundle, _req(scope=("filesystem:write",), reversible=True), _ctx()
-    )
+    d2 = evaluate(bundle, _req(scope=("filesystem:write",), reversible=True), _ctx())
     assert d2.verdict == Verdict.DENY

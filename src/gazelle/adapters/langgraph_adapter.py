@@ -59,7 +59,9 @@ class LangGraphAgent:
                             tc = tool_calls[0]
                             return ToolCall(
                                 tool=tc.get("name", tc.get("function", {}).get("name", "")),
-                                args=tc.get("args", {}) or tc.get("function", {}).get("arguments", {}) or {},
+                                args=tc.get("args", {})
+                                or tc.get("function", {}).get("arguments", {})
+                                or {},
                                 call_id=tc.get("id", ""),
                             )
         # No tool call found → emit whatever the last assistant message contains.

@@ -169,9 +169,7 @@ def get_broker() -> ApprovalBroker:
 # ---------------------------------------------------------------------------
 
 
-async def mediate(
-    request: ActionRequest, decision: Decision
-) -> ActionResult:
+async def mediate(request: ActionRequest, decision: Decision) -> ActionResult:
     """Run the action under the verdict's rules. Returns an ActionResult.
 
     Raises ToolDenied for DENY, ApprovalPending for APPROVE_REQUIRED.
@@ -210,8 +208,7 @@ async def mediate(
 
         args = (
             decision.transform_args
-            if decision.verdict == Verdict.TRANSFORM
-            and decision.transform_args is not None
+            if decision.verdict == Verdict.TRANSFORM and decision.transform_args is not None
             else request.args
         )
         value = await tool.fn(**args)

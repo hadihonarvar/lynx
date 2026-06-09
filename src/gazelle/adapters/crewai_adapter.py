@@ -39,8 +39,7 @@ class CrewAIAgent:
             import crewai  # noqa: F401
         except ImportError as exc:
             raise ImportError(
-                "CrewAIAgent requires the 'crewai' package. "
-                "Install with: pip install crewai"
+                "CrewAIAgent requires the 'crewai' package. Install with: pip install crewai"
             ) from exc
         self.crew = crew
         self._pending_tool: ToolCall | None = None

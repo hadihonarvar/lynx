@@ -41,11 +41,7 @@ def test_policy_lint_clean(tmp_path):
 
 def test_policy_bundle_id_is_deterministic(tmp_path):
     policy = tmp_path / "policy.yaml"
-    policy.write_text(
-        "version: 1\n"
-        "defaults: { on_no_match: deny }\n"
-        "rules: []\n"
-    )
+    policy.write_text("version: 1\ndefaults: { on_no_match: deny }\nrules: []\n")
     runner = CliRunner()
     res1 = runner.invoke(cli, ["policy", "bundle-id", str(policy)])
     res2 = runner.invoke(cli, ["policy", "bundle-id", str(policy)])

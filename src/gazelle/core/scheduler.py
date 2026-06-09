@@ -163,6 +163,7 @@ class Scheduler:
                     )
                 except Exception as exc:
                     from gazelle.core.types import ActionResult
+
                     result = ActionResult(ok=False, error=f"{type(exc).__name__}: {exc}")
                     self._audit(
                         run.id,
@@ -233,9 +234,7 @@ class Scheduler:
                 action_taken = await agent.step(conversation)
 
                 if isinstance(action_taken, FinalAnswer):
-                    self._audit(
-                        run.id, "run.succeeded", {"final_answer": action_taken.text}
-                    )
+                    self._audit(run.id, "run.succeeded", {"final_answer": action_taken.text})
                     run.status = RunStatus.SUCCEEDED
                     run.ended_at = now_utc()
                     self.store.save_run(run)
@@ -285,7 +284,9 @@ class Scheduler:
                 try:
                     self._audit(
                         run.id,
-                        "action.started" if decision.verdict != Verdict.DRY_RUN else "action.dry_run",
+                        "action.started"
+                        if decision.verdict != Verdict.DRY_RUN
+                        else "action.dry_run",
                         {"seq": seq, "verdict": decision.verdict.value},
                     )
                     result = await mediate(request, decision)
@@ -474,9 +475,7 @@ class Scheduler:
             budget.duration_seconds is not None
             and time.time() - started_wall >= budget.duration_seconds
         ):
-            raise BudgetExhausted(
-                f"duration budget exhausted ({budget.duration_seconds}s)"
-            )
+            raise BudgetExhausted(f"duration budget exhausted ({budget.duration_seconds}s)")
 
 
 def _format_tool_result(result: ActionResult) -> str:
