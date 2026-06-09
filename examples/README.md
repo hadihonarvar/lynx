@@ -25,6 +25,8 @@ COMPLETE     10                     "the full thing — one realistic DevOps sce
 | 08 | [`08_sql_transform.py`](08_sql_transform.py) | `transform` | "Auto-add `WHERE tenant_id = X` to every multi-tenant SQL query." |
 | 09 | [`09_fastapi_service.py`](09_fastapi_service.py) | full HTTP service | "Wrap Lynx in FastAPI for production deployment." |
 | 10 | [`10_devops_assistant.py`](10_devops_assistant.py) | **all five verdicts** | "An AI DevOps assistant — every safety rule in one realistic scenario." |
+| 11 | [`11_flask_service.py`](11_flask_service.py) | sync HTTP service | "Same as 09 but for Flask — sync framework, `runtime.run_sync()`." |
+| 12 | [`12_django_service.py`](12_django_service.py) | Django 4.1+ async views | "Same as 09 but as a single-file Django app." |
 
 ## How to run any of them
 
