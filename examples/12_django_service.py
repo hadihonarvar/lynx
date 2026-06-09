@@ -3,7 +3,7 @@
 EXAMPLE 12 — "Lynx inside a Django app" (INTEGRATION)
 ================================================================
 
-GRANDMA-LEVEL PROBLEM:
+SCENARIO:
     Django is the other big Python web framework — it powers a LOT of
     business apps already in production. If you have one of those and want
     to bolt on a safe AI assistant, you DON'T need to migrate. Lynx fits in

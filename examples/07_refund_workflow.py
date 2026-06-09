@@ -3,7 +3,7 @@
 EXAMPLE 07 — "Customer support, real-world rules" (ADVANCED)
 ================================================================
 
-GRANDMA-LEVEL PROBLEM:
+SCENARIO:
     Imagine a customer-support chatbot at a software company. Customers
     email asking for refunds. The bot needs to handle three different
     kinds of situations correctly:

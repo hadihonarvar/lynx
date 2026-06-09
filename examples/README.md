@@ -1,6 +1,6 @@
 # examples/
 
-A learning path of 10 examples. Each one is **self-contained** and starts with a **grandma-level explanation** of the problem it solves and where it would fit in a real system.
+A learning path of 10 examples. Each one is **self-contained** and starts with a **plain-language explanation** of the problem it solves and where it would fit in a real system.
 
 Read them in order — each one builds on the last.
 
@@ -91,7 +91,7 @@ After running through the examples:
 
 See [CONTRIBUTING.md](../CONTRIBUTING.md). Good examples are:
 - Self-contained — one Python file + (optionally) one YAML
-- Lead with the GRANDMA-LEVEL problem statement
+- Lead with the SCENARIO problem statement
 - Use a scripted agent for the offline path; document the API key for the LLM path
 - Print enough output that the demo tells you what happened
 - Demonstrate a verdict or capability that no existing example covers

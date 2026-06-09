@@ -3,7 +3,7 @@
 EXAMPLE 08 — "Auto-fix queries before they run" (ADVANCED)
 ================================================================
 
-GRANDMA-LEVEL PROBLEM:
+SCENARIO:
     Imagine a SaaS company that serves many businesses with one shared
     database. Each business is called a "tenant" and they have a tenant_id
     in every row (1 = Alice's bakery, 2 = Bob's bookstore, etc.).

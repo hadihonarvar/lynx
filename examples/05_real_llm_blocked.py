@@ -3,7 +3,7 @@
 EXAMPLE 05 — "A real AI brain, hitting the wall" (MORE COMPLEX)
 ================================================================
 
-GRANDMA-LEVEL PROBLEM:
+SCENARIO:
     Earlier examples used a "puppet" assistant: it played a fixed script,
     we knew exactly what it would say.
 

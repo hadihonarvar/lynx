@@ -3,7 +3,7 @@
 EXAMPLE 09 — "Lynx behind a web service" (ADVANCED)
 ================================================================
 
-GRANDMA-LEVEL PROBLEM:
+SCENARIO:
     The previous examples ran from the command line. But in real life you
     want your AI assistant available as a web service so other systems
     can use it: a phone app, a website, a Slack bot, a webhook from your

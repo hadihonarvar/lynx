@@ -3,7 +3,7 @@
 EXAMPLE 02 — "Block the catastrophic command" (SIMPLE)
 ================================================================
 
-GRANDMA-LEVEL PROBLEM:
+SCENARIO:
     Imagine you've hired a smart but careless assistant.  You ask them to
     tidy up. They get confused and pick up a flamethrower to clean the
     dishes.

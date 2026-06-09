@@ -133,7 +133,7 @@ ignore = ["E501", "B008"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["B017", "RUF012"]
-# Examples deliberately use proper typography (en-dashes) in grandma-level
+# Examples deliberately use proper typography (en-dashes) in plain-language
 # docstrings; class plans are PEP 8 "lookup table" style attributes.
 "examples/*" = ["RUF001", "RUF002", "RUF012"]
 

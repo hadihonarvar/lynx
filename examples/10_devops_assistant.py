@@ -3,7 +3,7 @@
 EXAMPLE 10 — "The full thing: a DevOps AI" (COMPLETE)
 ================================================================
 
-GRANDMA-LEVEL PROBLEM:
+SCENARIO:
     Picture a smart AI assistant whose job is to help manage your company's
     servers and cloud infrastructure. You'd want it to:
 

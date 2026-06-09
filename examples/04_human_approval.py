@@ -3,7 +3,7 @@
 EXAMPLE 04 — "Big decisions need a human" (MORE COMPLEX)
 ================================================================
 
-GRANDMA-LEVEL PROBLEM:
+SCENARIO:
     Some actions are too important for the assistant to do on its own —
     like wiring money out of your bank account, or sending a sensitive
     email, or deleting a customer's data.

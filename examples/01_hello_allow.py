@@ -3,7 +3,7 @@
 EXAMPLE 01 — "Just see it work" (SIMPLE)
 ================================================================
 
-GRANDMA-LEVEL PROBLEM:
+SCENARIO:
     This is the smallest possible example. Like turning a key in a car
     to make sure the engine starts before you drive anywhere.
 

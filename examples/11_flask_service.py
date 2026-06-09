@@ -3,7 +3,7 @@
 EXAMPLE 11 — "Lynx behind a Flask web service" (INTEGRATION)
 ================================================================
 
-GRANDMA-LEVEL PROBLEM:
+SCENARIO:
     A lot of people already have Flask apps — it's the most popular
     Python web framework. If you have a Flask service and want to add
     a safe AI assistant to it, you don't need to switch frameworks.

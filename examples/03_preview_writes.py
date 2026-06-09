@@ -3,7 +3,7 @@
 EXAMPLE 03 — "See it before it's real" (SIMPLE)
 ================================================================
 
-GRANDMA-LEVEL PROBLEM:
+SCENARIO:
     Imagine the smart assistant wants to write a letter for you. You want
     to read the letter BEFORE it goes in the mailbox — what if there's a
     typo? What if the assistant made up something silly?

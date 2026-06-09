@@ -3,7 +3,7 @@
 EXAMPLE 06 — "Paper trail for the auditors" (MORE COMPLEX)
 ================================================================
 
-GRANDMA-LEVEL PROBLEM:
+SCENARIO:
     Some industries are required BY LAW to keep records of every action
     an automated system took. Banks, hospitals, governments. If something
     goes wrong, an auditor needs to be able to say "show me what happened
