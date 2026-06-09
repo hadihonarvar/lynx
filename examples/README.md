@@ -1,17 +1,18 @@
 # examples/
 
-A learning path of 10 examples. Each one is **self-contained** and starts with a **plain-language explanation** of the problem it solves and where it would fit in a real system.
+A learning path of 12 examples. Each one is **self-contained** and starts with a **plain-language explanation** of the problem it solves and where it would fit in a real system.
 
 Read them in order — each one builds on the last.
 
 ```
-SIMPLE       01 → 02 → 03           "see the system working"
-MORE COMPLEX 04 → 05 → 06           "real workflows: approvals, real LLMs, compliance"
-ADVANCED     07 → 08 → 09           "production patterns: rules, transforms, web service"
-COMPLETE     10                     "the full thing — one realistic DevOps scenario"
+SIMPLE          01 → 02 → 03         "see the system working"
+MORE COMPLEX    04 → 05 → 06         "real workflows: approvals, real LLMs, compliance"
+ADVANCED        07 → 08 → 09         "production patterns: rules, transforms, web service"
+COMPLETE        10                   "the full thing — one realistic DevOps scenario"
+INTEGRATIONS    11 (Flask)  12 (Django)   "drop Lynx into your existing web framework"
 ```
 
-## The 10 examples
+## The 12 examples
 
 | # | File | Verdict shown | Problem in one line |
 |---|------|--------------|---------------------|
