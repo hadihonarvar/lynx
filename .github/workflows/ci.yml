@@ -60,7 +60,7 @@ jobs:
       - run: coverage run -m pytest
       - run: coverage report --fail-under=70
       - run: coverage xml
-      - uses: codecov/codecov-action@v4
+      - uses: codecov/codecov-action@v7
         if: ${{ !cancelled() }}
         with:
           files: coverage.xml
