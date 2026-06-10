@@ -67,10 +67,8 @@ except ImportError as exc:
     raise SystemExit("This example requires django: pip install django") from exc
 
 from lynx import FinalAnswer, Message, Runtime, ToolCall, tool
-from lynx.core.mediator import get_registry
 from lynx.policy import load_policy_file
 from lynx.stores.sqlite import SQLiteStore
-
 
 # ---------------------------------------------------------------------------
 # Tools — module-level registration
@@ -217,7 +215,7 @@ urlpatterns = [
 
 
 DEBUG = True
-SECRET_KEY = "lynx-demo-not-for-production"  # noqa: S105
+SECRET_KEY = "lynx-demo-not-for-production"
 ROOT_URLCONF = __name__
 ALLOWED_HOSTS = ["*"]
 INSTALLED_APPS = [__name__ + ".LynxAppConfig"]
@@ -237,8 +235,9 @@ def main() -> None:
         MIDDLEWARE=[],
     )
     django.setup()
-    from django.core.management import execute_from_command_line
     import sys
+
+    from django.core.management import execute_from_command_line
 
     execute_from_command_line(sys.argv)
 

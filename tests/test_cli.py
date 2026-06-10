@@ -11,7 +11,7 @@ def test_version_command():
     runner = CliRunner()
     res = runner.invoke(cli, ["--version"])
     assert res.exit_code == 0
-    assert "0.1.0" in res.output
+    assert "1.0.0" in res.output
 
 
 def test_init_creates_policy_and_config(tmp_path):
