@@ -25,7 +25,7 @@ from lynx.policy import allow, approve_required, deny, dry_run, rule, transform
 from lynx.runtime import Runtime, runtime
 from lynx.sdk import AgentAction, FinalAnswer, Message, ToolCall
 
-__version__ = "0.1.0"
+__version__ = "1.0.0"
 
 __all__ = [
     "ActionRequest",
