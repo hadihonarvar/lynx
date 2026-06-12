@@ -31,6 +31,9 @@ WHAT THIS EXAMPLE SHOWS:
       before executing anything
     - Act 6: `replay()` reconstructing both runs, including the
       resolved-uncertain marker for forensics
+    - Act 7: a FILE-backed store built on step_record_to_json (the format
+      `lynx trace <file>` reads), plus the run.bundle_changed warning when
+      a run is resumed under a different policy than its journal
 
 RUN WITH:
     python examples/24_durable_resume.py
@@ -39,6 +42,7 @@ RUN WITH:
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 
 from lynx import (
     DuplicateRecord,
@@ -51,6 +55,8 @@ from lynx import (
     compile_policy,
     replay,
     run_agent,
+    step_record_from_json,
+    step_record_to_json,
     tool,
 )
 
@@ -75,6 +81,34 @@ class MemoryRunStore:
             (r for (rid, _), r in self.records.items() if rid == run_id),
             key=lambda r: r.seq,
         )
+
+
+class JsonlRunStore:
+    """A FILE-backed store (~12 lines) — survives the process, and its file
+    is exactly what `lynx trace <file>` reads. Single process only: a flat
+    file cannot enforce (run_id, seq) uniqueness across processes."""
+
+    def __init__(self, path: Path) -> None:
+        self.path = path
+        self.seen: set[tuple[str, int]] = set()
+        if path.exists():
+            for line in path.read_text().splitlines():
+                rec = step_record_from_json(line)
+                self.seen.add((rec.run_id, rec.seq))
+
+    async def append(self, record: StepRecord) -> None:
+        key = (record.run_id, record.seq)
+        if key in self.seen:
+            raise DuplicateRecord(f"{key} already journaled")
+        with self.path.open("a", encoding="utf-8") as f:
+            f.write(step_record_to_json(record) + "\n")
+        self.seen.add(key)
+
+    async def load(self, run_id: str):
+        if not self.path.exists():
+            return []
+        records = (step_record_from_json(ln) for ln in self.path.read_text().splitlines())
+        return sorted((r for r in records if r.run_id == run_id), key=lambda r: r.seq)
 
 
 class CrashingStore(MemoryRunStore):
@@ -240,6 +274,48 @@ async def main() -> None:
                 continue
             note = " [resolved uncertain retry]" if s.resolved_uncertain else ""
             print(f"    step {s.step}: {s.tool} verdict={s.verdict} ok={s.ok}{note}")
+
+    # ---- Act 7: a FILE-backed store + `lynx trace` + bundle-change warning --
+    print()
+    print("=" * 64)
+    print("Act 7 — JSONL file store, `lynx trace`, and run.bundle_changed")
+    print("=" * 64)
+    jsonl_path = Path("invoice-0613.jsonl")
+    jsonl_path.unlink(missing_ok=True)
+    file_store = JsonlRunStore(jsonl_path)
+    done = await run("invoice-0613", file_store)
+    print(f"  final     : {done.final_answer}")
+    print(
+        f"  journal   : {jsonl_path} ({len(jsonl_path.read_text().splitlines())} records on disk)"
+    )
+    print(f"  inspect it: $ lynx trace {jsonl_path}")
+
+    # Resume the COMPLETED run under a different policy: the journal records
+    # which bundle it was written with, so Lynx warns instead of guessing.
+    looser = compile_policy(
+        "version: 1\ndefaults: { on_no_match: allow, on_missing_shadow: allow }\nrules: []"
+    )
+    warnings: list[str] = []
+
+    async def watch(event):
+        if event.kind == "run.bundle_changed":
+            warnings.append(
+                f"{event.body['journaled_bundle_id'][:8]} -> {event.body['current_bundle_id'][:8]}"
+            )
+
+    again = await run_agent(
+        PaymentsAgent("invoice-0613"),
+        task="Collect the $42 Ada owes us (invoice-0613)",
+        tools=ToolSet.from_functions(look_up_customer, charge_customer),
+        policy=looser,  # different bundle than the journal was written with
+        on_approval=auto_approve(),
+        sinks=(watch,),
+        store=file_store,
+        run_id="invoice-0613",
+    )
+    print(f"  re-run    : {again.final_answer!r} (replayed; charges {CHARGES['invoice-0613']})")
+    print(f"  warning   : run.bundle_changed emitted: {warnings[0]}")
+    print("  (the journal is left on disk — try the lynx trace command, then rm it)")
 
 
 if __name__ == "__main__":

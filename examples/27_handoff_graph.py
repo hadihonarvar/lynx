@@ -21,12 +21,14 @@ SCENARIO:
     module is declarative sugar over a loop you could write yourself.
 
 WHAT THIS EXAMPLE SHOWS:
-    - The killer pattern: triage (read-only) → fixer (write) → reviewer
-      (read-only), looping fixer↔reviewer until approved
-    - The SAME policy file refusing writes in one node and a different
-      policy allowing them in the next
-    - YAML-declared edges (compile_graph) with answer_matches routing
-    - The full path printed with per-node denial counts
+    - Act 1: the killer pattern — triage (read-only) → fixer (write) →
+      reviewer (read-only), looping fixer↔reviewer until approved, with
+      YAML-declared edges (compile_graph) and per-node denial counts
+    - Act 2: Python first — a plain function as the Router, no YAML
+    - Act 3: `denials_gt` routing — escalate to a privileged node BECAUSE
+      policy kept denying the worker (plus a per-node Budget)
+    - Act 4: durable workflows — re-run the whole graph against the same
+      RunStore with agents that would crash if stepped: zero model calls
 
 RUN WITH:
     python examples/27_handoff_graph.py
@@ -37,9 +39,13 @@ from __future__ import annotations
 import asyncio
 
 from lynx import (
+    Budget,
+    DuplicateRecord,
     FinalAnswer,
     GraphNode,
     Message,
+    NodeOutcome,
+    StepRecord,
     ToolCall,
     ToolSet,
     compile_graph,
@@ -149,32 +155,137 @@ edges:
 )
 
 
-async def main() -> None:
-    reviewer = ReviewerAgent()
-    nodes = {
+def make_nodes() -> dict[str, GraphNode]:
+    """Fresh agents per run — graph nodes are stateless run_agent calls."""
+    return {
         "triage": GraphNode(agent=TriageAgent(), tools=TOOLS, policy=READ_ONLY),
         "fixer": GraphNode(agent=FixerAgent(), tools=TOOLS, policy=CAN_WRITE),
-        "reviewer": GraphNode(agent=reviewer, tools=TOOLS, policy=READ_ONLY),
+        "reviewer": GraphNode(agent=ReviewerAgent(), tools=TOOLS, policy=READ_ONLY),
     }
 
-    print("=" * 66)
-    print("triage (read-only) -> fixer (write) -> reviewer (read-only) loop")
-    print("=" * 66)
 
-    result = await run_graph(nodes, "Fix the security bug in auth.py", router=GRAPH)
-
+def show(result) -> None:
     for o in result.path:
         outcome = o.result.final_answer or o.result.error
         denials = f"  [{o.denials} denial(s)]" if o.denials else ""
-        print(f"  hop {o.transitions}: {o.node:<9} -> {outcome}{denials}")
+        print(f"  hop {o.transitions}: {o.node:<10} -> {outcome}{denials}")
+    print(f"  final: {result.final.final_answer}  (error={result.error})")
 
-    print()
-    print(f"  final: {result.final.final_answer}")
-    print(f"  hops : {result.transitions + 1} node runs, error={result.error}")
+
+async def main() -> None:
+    # ---- Act 1: the YAML review loop ---------------------------------------
+    print("=" * 66)
+    print("Act 1 — triage (read-only) -> fixer (write) <-> reviewer loop")
+    print("=" * 66)
+    result = await run_graph(make_nodes(), "Fix the security bug in auth.py", router=GRAPH)
+    show(result)
     print()
     print("  Notice hop 0: the triage MODEL tried to patch the file itself —")
     print("  its node's policy denied it (that's the [1 denial(s)]), so it")
     print("  handed off instead. Role boundaries enforced, not prompted.")
+
+    # ---- Act 2: Python-first — any function is a Router --------------------
+    print()
+    print("=" * 66)
+    print("Act 2 — no YAML needed: a plain function is a Router")
+    print("=" * 66)
+
+    def my_router(o: NodeOutcome) -> str | None:
+        if o.node == "triage" and "needs fix" in (o.result.final_answer or ""):
+            return "fixer"
+        if o.node == "fixer":
+            return "reviewer"
+        if o.node == "reviewer" and "approved" not in (o.result.final_answer or ""):
+            return "fixer"
+        return None  # terminal
+
+    result = await run_graph(
+        make_nodes(), "Fix the security bug in auth.py", router=my_router, start="triage"
+    )
+    show(result)
+
+    # ---- Act 3: DENIAL COUNTS as a routing signal ---------------------------
+    print()
+    print("=" * 66)
+    print("Act 3 — escalate by denial count (policy as a routing signal)")
+    print("=" * 66)
+    escalation = compile_graph(
+        """
+start: worker
+max_transitions: 4
+edges:
+  - from: worker
+    when: { denials_gt: 0 }
+    to: privileged
+  - from: worker
+    to: done
+"""
+    )
+    nodes = {
+        # The worker is read-only AND on a tight per-node budget: its patch
+        # attempts get denied until the budget stops it...
+        "worker": GraphNode(
+            agent=FixerAgent(), tools=TOOLS, policy=READ_ONLY, budget=Budget(steps=2)
+        ),
+        # ...so the graph escalates to the node that's allowed to write.
+        "privileged": GraphNode(agent=FixerAgent(), tools=TOOLS, policy=CAN_WRITE),
+    }
+    result = await run_graph(nodes, "Patch auth.py", router=escalation)
+    show(result)
+    print("  `denials_gt` is routing on POLICY outcomes — only possible")
+    print("  because the permission boundary is part of the graph. The worker")
+    print("  also had its own per-node Budget(steps=2): boundaries all the way.")
+
+    # ---- Act 4: durable workflows — crash-resume the WHOLE graph -----------
+    print()
+    print("=" * 66)
+    print("Act 4 — resume a whole workflow: zero model calls on re-run")
+    print("=" * 66)
+
+    class MemoryRunStore:  # the same ~12-line reference store as example 24
+        def __init__(self) -> None:
+            self.records: dict[tuple[str, int], StepRecord] = {}
+
+        async def append(self, record: StepRecord) -> None:
+            key = (record.run_id, record.seq)
+            if key in self.records:
+                raise DuplicateRecord(f"{key} already journaled")
+            self.records[key] = record
+
+        async def load(self, run_id: str):
+            return sorted(
+                (r for (rid, _), r in self.records.items() if rid == run_id),
+                key=lambda r: r.seq,
+            )
+
+    store = MemoryRunStore()
+    first = await run_graph(
+        make_nodes(),
+        "Fix the security bug in auth.py",
+        router=GRAPH,
+        store=store,
+        run_id="ticket-4711",
+    )
+    print(f"  first run : {len(first.path)} node runs -> {first.final.final_answer!r}")
+
+    class WouldExplode:  # proves nothing is re-executed on resume
+        async def step(self, conv):
+            raise AssertionError("resume must NOT re-call any model")
+
+    boom = {
+        name: GraphNode(agent=WouldExplode(), tools=n.tools, policy=n.policy)
+        for name, n in make_nodes().items()
+    }
+    second = await run_graph(
+        boom,
+        "Fix the security bug in auth.py",
+        router=GRAPH,
+        store=store,
+        run_id="ticket-4711",
+    )
+    print(f"  re-run    : {len(second.path)} node runs -> {second.final.final_answer!r}")
+    print("  every node replayed from the journal; routing decisions replayed")
+    print("  from journaled handoff records — no model calls, no side effects.")
 
 
 if __name__ == "__main__":

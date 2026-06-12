@@ -40,7 +40,7 @@ FULL COVERAGE   13 → 27              "every feature: python rules, transform o
 | 15 | [`15_sqlite_sink.py`](15_sqlite_sink.py) | custom sink + `multi_sink` resilience | "Write a SQLite audit sink yourself in 10 lines; one bad sink in `multi_sink` doesn't kill the run." |
 | 16 | [`16_async_approval.py`](16_async_approval.py) | cross-process approval (mocked) | "The Slack/webhook pattern with a real `asyncio.Event` — including timeout enforcement." |
 | 17 | [`17_shadow_helpers.py`](17_shadow_helpers.py) | `lynx.shadows.*` helpers | "Don't reinvent shadows — wire the built-in filesystem/HTTP/shell/SQL previews directly." |
-| 18 | [`18_sandboxed_tool.py`](18_sandboxed_tool.py) | `run_in_subprocess` | "Bound a tool's CPU/memory/wall-clock budget. Not a security boundary — see SECURITY.md." |
+| 18 | [`18_sandboxed_tool.py`](18_sandboxed_tool.py) | `subprocess_executor` | "One line on the executor seam bounds EVERY tool's CPU/memory/wall-clock. Not a security boundary — see SECURITY.md." |
 | 19 | [`19_hot_swap.py`](19_hot_swap.py) | hot-swap + budget + unknown tool | "Different policy on the next call. `Budget.steps` exhaustion. Unknown tool — survives." |
 | 20 | [`20_mcp_tools.py`](20_mcp_tools.py) | MCP integration | "Discover an MCP server's tools and pipe them through Lynx's policy, with proper child-process lifecycle." |
 | 21 | [`21_langgraph_demo.py`](21_langgraph_demo.py) | LangGraph adapter | "Wrap a compiled LangGraph state graph in `LangGraphAgent` so its tool nodes go through policy." |
@@ -143,9 +143,10 @@ There is no `lynx ps` / `lynx trace` / `lynx audit` — v2 holds no past runs.
 | CrewAI integration | `CrewAIAgent(crew=...)` — single-shot tradeoff | 22 |
 | `PolicyCompileError` | Every malformed policy fails at compile time, not at runtime | 23 |
 | Durability / `RunStore` | Crash-resume, idempotent re-runs, `superseded` losers, `replay()` | 24 |
+| `lynx trace` + JSONL store | `step_record_to_json` file journal, `run.bundle_changed` warning | 24 |
 | Token metering / `Usage` + caps | `step.usage` events, cost sink with user rates, `Budget(output_tokens=...)` | 25 |
 | Executor seam / `route_executor` | Per-tool execution routing, fail-closed isolation, BYO sandbox | 26 |
-| Handoff graphs / `run_graph` | Per-node policy boundaries, denial-count routing, bounded cycles | 27 |
+| Handoff graphs / `run_graph` | Per-node policy boundaries, denial-count routing, Python + YAML routers, durable workflow resume | 27 |
 | Web service integration | FastAPI / Flask / Django | 09 / 11 / 12 |
 | Real LLM | ClaudeAgent / OpenAIAgent (proper `async with` lifetime) | 05 |
 
