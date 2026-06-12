@@ -4,8 +4,23 @@ All notable changes to Lynx will be documented here. Format follows [Keep a Chan
 
 ## [Unreleased]
 
+### Changed — ⚠ behavior change
+- **Budgets default to UNLIMITED.** `Budget()` no longer caps anything (previously `steps` defaulted to 50, and `run_agent`'s default budget was `Budget(steps=50, duration_seconds=600)`). The rule is now: *what you define is enforced; what you don't define is no restriction.* Long-running tasks no longer die mysteriously at step 50 — but an unbudgeted agent that never answers runs forever, so set at least `steps` or `duration_seconds` in production. If you relied on the implicit 50-step / 10-minute cap, pass it explicitly.
+
+### Added (timeouts)
+- `Budget.step_timeout_seconds` — wraps each `agent.step()` model call in `asyncio.wait_for`, so a hung provider connection fails the run with `error="agent.step timed out after Ns"` instead of hanging forever. Durability-safe: nothing journals until the step returns, so a timed-out step leaves no record and resume re-asks the model cleanly.
+- `inline_executor(timeout_seconds=...)` — bounds each in-process tool call; on expiry the action fails with a structured timeout error and the run continues (the agent sees `[error] ...` and adapts). Cancels cooperative tools only — tight CPU loops need `subprocess_executor`, which kills the child.
+
+### Fixed
+- `run_in_subprocess` (and therefore `subprocess_executor`) now works for tools defined in a script's `__main__`: the child loads the parent script under a private module name and aliases it as `__main__` before unpickling (the same mechanism `multiprocessing` uses; the script's `if __name__ == "__main__"` guard does not re-run). Previously every script-defined sandboxed tool failed with `sandbox exited 1`. Interactive-session functions now fail fast with a clear message.
+
 ### Added
-- (nothing yet)
+- **Handoff graphs (optional)** — `lynx.graph`: sequential multi-agent workflows where the edge is a permission boundary. Each `GraphNode` is one complete `run_agent` call with its own policy/tools/budget — role boundaries are enforced by policy, not prompts (an overreaching orchestrator model gets denied, then hands off). Routing is a pure `Router` callable over `NodeOutcome` (status, final answer, steps, **denial counts** — a signal only possible because policy is first-class), or a YAML edge table via `compile_graph`/`load_graph_file` (ReDoS-guarded regexes, compile-time validation with `GraphCompileError`, `done` terminal, first-match-wins). `max_transitions` is always enforced — unbounded recursion is impossible by construction; cycles like fixer ⇄ reviewer are fine. Context passing is explicit (`compose_task`). Durability composes: node runs journal under derived child run_ids, routing decisions journal as `handoff` records, resume replays both, racing graph workers resolve to one winner. New graph-level events: `graph.started`, `graph.handoff`, `graph.exhausted`, `graph.superseded`, `graph.finished`. The kernel knows nothing about graphs — this is sugar over a loop of `run_agent` calls you could write yourself.
+- Example 27 (`27_handoff_graph.py`): triage (read-only) → fixer (write) ⇄ reviewer (read-only) until approved, with the triage model's own write attempt denied at hop 0.
+- Example 27 expanded: a plain-function `Router` (Python first), `denials_gt` escalation with a per-node `Budget`, and whole-workflow durable resume (zero model calls on re-run).
+- Example 24 gains Act 7: a JSONL file-backed `RunStore` built on `step_record_to_json` (the format `lynx trace <file>` reads) and the `run.bundle_changed` warning in action.
+- Examples 28-30: the full-stack capstone (every pillar composed in one refund pipeline), memory gating through policy (the OWASP ASI06 recipe — poisoning denied, recalls tenant-scoped via TRANSFORM, deletions previewed + approved; all five verdicts on one surface), and a FinOps attribution sink (per-customer x per-model chargeback joining `run.started` with `step.usage`).
+- Example 18 modernized to the v2.3 executor seam: `executor=subprocess_executor(...)` bounds every approved action with zero sandbox code in the tools (the manual `run_in_subprocess` API remains documented as the underlying mechanism).
 
 ## [2.3.0] — 2026-06-11
 

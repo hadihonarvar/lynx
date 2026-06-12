@@ -105,6 +105,12 @@ class Usage:
 class Budget:
     """Hard caps enforced by the scheduler, all checked between steps.
 
+    Every field defaults to ``None`` = **unlimited**: only the caps you set
+    are enforced; an undefined cap is no restriction at all. ``Budget()``
+    constrains nothing — which also means an agent loop that never returns
+    a ``FinalAnswer`` runs forever. In production, set at least ``steps``
+    or ``duration_seconds``.
+
     ``duration_seconds`` uses a monotonic clock so wall-clock jumps do not
     exhaust it; a single hung tool call is not interrupted (use a tool-level
     timeout for that).
@@ -114,13 +120,20 @@ class Budget:
     in-loop limiter, they stop the *next* model call — the step that crossed
     the cap has already happened. Agents that report no usage are not
     metered; the caps simply never trigger.
+
+    ``step_timeout_seconds`` is the exception to "checked between steps": it
+    wraps each ``agent.step()`` call itself, so a hung provider connection
+    fails the run instead of hanging it forever. It does NOT cover tool
+    execution — bound tools at the executor seam
+    (``inline_executor(timeout_seconds=...)`` / ``subprocess_executor``).
     """
 
     duration_seconds: int | None = None
-    steps: int | None = 50
+    steps: int | None = None
     input_tokens: int | None = None
     output_tokens: int | None = None
     tokens: int | None = None  # combined input + output
+    step_timeout_seconds: float | None = None  # per agent.step() model call
 
 
 @dataclass(frozen=True, slots=True)

@@ -82,7 +82,7 @@ async def run_agent(
     policy: PolicyBundle,
     sinks: Sequence[Sink] = (),
     on_approval: ApprovalHandler | None = None,
-    budget: Budget = Budget(steps=50, duration_seconds=600),
+    budget: Budget = Budget(),  # unlimited — only caps you set are enforced
     principal: Principal = Principal(kind="user", id="anonymous"),
     environment: str = "dev",
     workspace: str = ".",
@@ -100,7 +100,10 @@ async def run_agent(
         policy:       Compiled PolicyBundle (use compile_policy / load_policy_file).
         sinks:        Iterable of Sink callables. Each event is fanned out.
         on_approval:  Sync handler for APPROVE_REQUIRED. Defaults to auto-deny.
-        budget:       Hard caps on steps / duration.
+        budget:       Hard caps on steps / duration / tokens / step timeout.
+                      Defaults to NO caps: only what you define is enforced —
+                      an unbudgeted agent that never answers runs forever, so
+                      set at least steps or duration_seconds in production.
         principal:    Who the agent is acting on behalf of.
         environment:  e.g. "dev" / "staging" / "prod" — policy can match on this.
         workspace:    Filesystem context the agent works in.
@@ -365,7 +368,26 @@ async def run_agent(
                 record_usage(action.usage)
             else:
                 try:
-                    action = await agent.step(conversation)
+                    if budget.step_timeout_seconds is not None:
+                        # A hung provider call fails the run instead of
+                        # hanging it forever. Cancellation propagates into
+                        # the adapter's HTTP client; nothing has been
+                        # journaled for this step, so resume re-asks cleanly.
+                        action = await asyncio.wait_for(
+                            agent.step(conversation), timeout=budget.step_timeout_seconds
+                        )
+                    else:
+                        action = await agent.step(conversation)
+                except TimeoutError:
+                    reason = f"agent.step timed out after {budget.step_timeout_seconds}s"
+                    await emit("run.failed", {"reason": reason})
+                    return RunResult(
+                        correlation_id=cid,
+                        bundle_id=policy.id,
+                        error=reason,
+                        steps_taken=step_seq,
+                        usage=usage_totals(),
+                    )
                 except Exception as exc:
                     await emit("run.failed", {"reason": f"agent.step raised: {exc!r}"})
                     return RunResult(

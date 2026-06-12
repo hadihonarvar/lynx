@@ -45,3 +45,27 @@ async def test_subprocess_raises_on_tool_exception() -> None:
 async def test_subprocess_enforces_timeout() -> None:
     with pytest.raises(SandboxError, match="timeout"):
         await run_in_subprocess(_slow, {}, timeout_seconds=0.5)
+
+
+async def test_subprocess_supports_main_module_functions(tmp_path) -> None:
+    """Functions defined in a script's __main__ must work in the child —
+    the sandbox remaps the parent script as the child's __main__ (the same
+    fix multiprocessing uses). Regression: this used to fail with
+    'sandbox exited 1' on every script-defined tool."""
+    import subprocess
+    import sys
+
+    script = tmp_path / "main_tool.py"
+    script.write_text(
+        "import asyncio\n"
+        "from lynx.sandbox import run_in_subprocess\n\n"
+        "async def double(x: int) -> int:\n"
+        "    return x * 2\n\n"
+        "async def main():\n"
+        "    print(await run_in_subprocess(double, {'x': 21}))\n\n"
+        "if __name__ == '__main__':\n"
+        "    asyncio.run(main())\n"
+    )
+    proc = subprocess.run([sys.executable, str(script)], capture_output=True, text=True, timeout=60)
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stdout.strip() == "42"

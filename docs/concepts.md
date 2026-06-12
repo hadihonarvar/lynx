@@ -107,6 +107,17 @@ async def my_sink(event: AuditEvent) -> None: ...
 
 Built-in: `stdout_sink`, `jsonl_sink`, `noop_sink`, `multi_sink`, `callback_sink`.
 
+## Handoff graph (optional)
+
+Sequential multi-node workflows where each node is one complete `run_agent` call with **its own policy, tools, and budget** — the edge between nodes is a permission boundary. Entirely optional: the kernel knows nothing about graphs.
+
+```python
+class Router(Protocol):
+    def __call__(self, outcome: NodeOutcome) -> str | None: ...   # next node, or None/"done"
+```
+
+`GraphNode` (agent + tools + policy + budget + on_approval), `NodeOutcome` (node, `RunResult`, **denials** — replay-stable, transitions), `GraphResult` (final result, full path, error for max-transitions/unknown-node/superseded). `compile_graph(yaml)` / `load_graph_file(path)` build a `GraphSpec` — a compiled edge table that *is* a Router; first matching edge wins; predicates: `status`, `answer_matches`/`error_matches` (ReDoS-guarded), `denials_gt`, `steps_gt`; `done` is the reserved terminal. `max_transitions` is always enforced. Context passing is explicit via `compose_task(original_task, outcome)`. With `store=`/`run_id=`, node runs journal under derived child run_ids and each routing decision journals as a `handoff` record — resume replays both. Graph-level events: `graph.started`, `graph.handoff`, `graph.exhausted`, `graph.superseded`, `graph.finished`.
+
 ## Executor
 
 A callable that runs one approved action. The seam where execution isolation attaches — policy decides *whether*, the executor decides *where and how*.
@@ -182,7 +193,7 @@ Principal(kind="user" | "service" | "agent", id="...", name="...")
 
 ## Budget
 
-Frozen. Hard caps the kernel enforces between steps. All fields optional except `steps`, which defaults to 50:
+Frozen. Hard caps the kernel enforces between steps. **Every field defaults to `None` = unlimited** — only the caps you define are enforced; what you don't define is no restriction at all:
 
 ```python
 @dataclass(frozen=True, slots=True)
@@ -192,9 +203,10 @@ class Budget:
     input_tokens: int | None = None    # enforced against adapter-reported Usage
     output_tokens: int | None = None
     tokens: int | None = None          # combined input + output
+    step_timeout_seconds: float | None = None   # per agent.step() model call
 ```
 
-The scheduler uses a monotonic clock for `duration_seconds`, so wall-clock NTP jumps cannot exhaust (or extend) the budget. Checks happen between steps; a single hung tool call is not interrupted by `duration_seconds` — use a tool-level timeout for that. Token caps stop the *next* model call — the step that crossed the cap already happened — and never trigger for agents that report no usage.
+The scheduler uses a monotonic clock for `duration_seconds`, so wall-clock NTP jumps cannot exhaust (or extend) the budget. Checks happen between steps; a single hung tool call is not interrupted by `duration_seconds` — bound tools at the executor seam (`inline_executor(timeout_seconds=…)` cancels cooperative tools; `subprocess_executor` kills even tight CPU loops). Token caps stop the *next* model call — the step that crossed the cap already happened — and never trigger for agents that report no usage. `step_timeout_seconds` is the exception to "between steps": it wraps each `agent.step()` call itself, so a hung provider connection fails the run (`error="agent.step timed out after Ns"`) instead of hanging it forever — and since nothing journals until the step returns, a timed-out step leaves no record and resume simply re-asks the model.
 
 ## Usage
 
@@ -212,7 +224,7 @@ class Usage:
 
 The scheduler accumulates these into `RunResult.usage` (lifetime totals — replayed steps included), emits a `step.usage` event per live metered step, and enforces `Budget` token caps. Field names align with OpenTelemetry GenAI conventions (`gen_ai.usage.input_tokens` / `output_tokens`). The kernel never converts tokens to money — that's your sink, your rates.
 
-`run_agent`'s default for its `budget=` parameter is `Budget(steps=50, duration_seconds=600)` — a 50-step / 10-minute cap. Override per call to widen or tighten.
+`run_agent`'s default is `Budget()` — **no caps at all**. An unbudgeted agent that never returns a `FinalAnswer` runs forever; in production set at least `steps` or `duration_seconds`.
 
 > v2.0 removed the `usd` and `tokens` fields that v1 carried: neither was enforced by the kernel. Token/spend accounting belongs in a sink (or an adapter wrapping the LLM call), not in the policy boundary.
 

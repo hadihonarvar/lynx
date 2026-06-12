@@ -22,7 +22,7 @@ def test_principal_is_frozen() -> None:
 
 
 def test_budget_default_steps() -> None:
-    assert Budget().steps == 50
+    assert Budget().steps is None  # undefined = unlimited; only set caps enforce
 
 
 def test_verdict_string_form() -> None:

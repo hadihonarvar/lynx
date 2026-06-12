@@ -66,6 +66,23 @@ async def run_in_subprocess(
 
     import os
 
+    # Functions defined in a script's ``__main__`` pickle by reference to the
+    # module name "__main__" — which, in the child, is the wrapper script.
+    # Replicate multiprocessing's fix: ship the parent script's path and have
+    # the child load it under a private name, then alias it as "__main__"
+    # before unpickling. (The child loads it with __name__ != "__main__", so
+    # the script's ``if __name__ == "__main__":`` guard does not re-run.)
+    main_file = ""
+    if getattr(fn, "__module__", None) == "__main__":
+        main_mod = sys.modules.get("__main__")
+        main_file = getattr(main_mod, "__file__", "") or ""
+        if not main_file:
+            raise SandboxError(
+                f"cannot sandbox {getattr(fn, '__qualname__', fn)!r}: it is defined "
+                "in an interactive __main__ with no file. Define the tool in an "
+                "importable module (or a script file) instead."
+            )
+
     try:
         pickled = pickle.dumps({"fn": fn, "args": args})
     except (pickle.PicklingError, AttributeError, TypeError) as exc:
@@ -97,6 +114,18 @@ async def run_in_subprocess(
                 )
             except Exception as exc:
                 print(f"[lynx-sandbox] RLIMIT_AS unsupported: {{exc}}", file=sys.stderr)
+
+            main_file = {main_file!r}
+            if main_file:
+                # The pickled function lives in the parent script's __main__.
+                # Load that script under a private name (its __main__ guard
+                # stays off) and alias it so unpickling resolves against it.
+                import importlib.util
+                spec = importlib.util.spec_from_file_location("__lynx_main__", main_file)
+                mod = importlib.util.module_from_spec(spec)
+                sys.modules["__lynx_main__"] = mod
+                spec.loader.exec_module(mod)
+                sys.modules["__main__"] = mod
 
             with open({str(payload_path)!r}, "rb") as f:
                 payload = pickle.load(f)

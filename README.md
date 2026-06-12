@@ -36,7 +36,7 @@ result = await run_agent(
     environment="prod",          # policy can match on context.environment
     # principal=Principal(kind="user", id="hadi"),  # optional
     # workspace=".",                                 # optional
-    # budget=Budget(steps=50, duration_seconds=600), # optional
+    # budget=Budget(steps=50, duration_seconds=600), # default: NO caps — define to enforce
     # correlation_id=None,                           # auto-generated if None
 )
 # result: { correlation_id, bundle_id, final_answer, error, steps_taken }
@@ -54,6 +54,7 @@ result = await run_agent(
 - **Durable runs, no double side effects** *(opt-in)*. Pass a `RunStore` you implement over your own storage and a stable `run_id`: a crashed run resumes at the first incomplete step — the model is not re-called for completed steps (no re-burned tokens) and journaled actions are not re-executed (no double charges). Two racing workers resolve to one winner; the loser exits `superseded` before executing anything.
 - **Token metering and caps.** Adapters report per-step input/output token counts; the kernel streams them as `step.usage` events, totals them on `RunResult.usage`, and enforces `Budget(tokens=…, input_tokens=…, output_tokens=…)` between steps. The kernel counts and enforces counts — it never converts tokens to money; multiply by your own rates in a sink.
 - **Pluggable execution (the executor seam).** Every approved action flows through one `Executor` — in-process by default, a subprocess with rlimits, or *your* Docker/gVisor/E2B wrapper (one async callable). Route per-tool via `@tool(isolation="container")` + `route_executor({...})`, failing closed when a requested isolation has no route. Lynx defines the seam; the security boundary is whatever you plug in.
+- **Handoff graphs** *(optional)*. Sequential multi-agent workflows where **the edge is a permission boundary**: each node is one `run_agent` call with its own policy/tools/budget, and edges route on outcomes — including **denial counts**. Bounded by construction (`max_transitions`), explicit context passing, YAML-declarable, durable via the same `RunStore`. Just sugar over a loop of `run_agent` calls — skip it and write the loop yourself anytime.
 
 ## What v2 does NOT do
 
@@ -489,6 +490,52 @@ boundary** (see [SECURITY.md](SECURITY.md)). Lynx is the chokepoint where
 isolation attaches; the boundary itself is whatever you put behind the
 seam — the same stance as "you bring the database."
 
+## Handoff graphs — the edge is a permission boundary
+
+Optional, and deliberately thin: a node is just a `run_agent()` call, so the
+graph module is declarative sugar over a loop you could write yourself.
+What it adds is the part multi-agent frameworks fumble — **enforced role
+boundaries** and bounded, explicit routing:
+
+```python
+from lynx import GraphNode, compile_graph, run_graph
+
+nodes = {
+    "triage":   GraphNode(agent=triage,   tools=tools, policy=read_only),
+    "fixer":    GraphNode(agent=fixer,    tools=tools, policy=can_write),
+    "reviewer": GraphNode(agent=reviewer, tools=tools, policy=read_only),
+}
+graph = compile_graph("""
+start: triage
+max_transitions: 8                  # mandatory bound — runaway loops impossible
+edges:
+  - { from: triage,   when: { answer_matches: "(?i)needs fix" }, to: fixer }
+  - { from: triage,   to: done }
+  - { from: fixer,    to: reviewer }
+  - { from: reviewer, when: { answer_matches: "(?i)approved" },  to: done }
+  - { from: reviewer, when: { denials_gt: 2 }, to: privileged }  # policy as a routing signal
+  - { from: reviewer, to: fixer }   # rejected → loop back; cycles are fine
+""")
+result = await run_graph(nodes, "Fix the bug", router=graph)
+```
+
+- **Per-node policy is enforced, not prompted**: if the triage model tries to
+  write, *its node's policy denies it* — the orchestrator can't bypass its
+  role (the failure mode every role-based framework suffers).
+- **Denial counts route**: `denials_gt` is a predicate no other orchestrator
+  has, because nobody else makes policy first-class.
+- **Context passing is explicit**: the next node's task = the original goal +
+  the previous node's result, clearly marked (`compose_task=` to customize).
+  No hidden shared state, no live agent-to-agent messages, sequential only.
+- **Python first**: skip YAML entirely — any `(NodeOutcome) -> str | None`
+  callable is a `Router`.
+- **Durability composes**: pass `store=`/`run_id=` and node runs + routing
+  decisions journal; a crashed 3-node workflow resumes at the node it died
+  in, and racing graph workers resolve to one winner.
+
+See [`examples/27_handoff_graph.py`](examples/27_handoff_graph.py) for the
+triage → fixer ⇄ reviewer loop with an enforced role boundary.
+
 ## Token usage & budgets
 
 Adapters (`ClaudeAgent`, `OpenAIAgent`) attach a `Usage` record to every model
@@ -500,9 +547,10 @@ result = await run_agent(
     budget=Budget(
         steps=50,
         duration_seconds=600,
-        input_tokens=500_000,     # separate caps — input and output
-        output_tokens=100_000,    # are priced differently
-        tokens=550_000,           # or one combined cap
+        input_tokens=500_000,       # separate caps — input and output
+        output_tokens=100_000,      # are priced differently
+        tokens=550_000,             # or one combined cap
+        step_timeout_seconds=120,   # a hung model call fails, never hangs
     ),
     sinks=(my_cost_sink,),        # step.usage events stream here
 )
