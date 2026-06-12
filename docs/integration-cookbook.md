@@ -289,9 +289,117 @@ The pattern is always: a 5–10 line `async def my_sink_or_handler(...)` that ta
 
 ---
 
-## Durability — wrapping run_agent in a workflow engine
+## Durability — RunStore recipes
 
-The Lynx kernel does not survive a process restart by design (see [FAQ](faq.md)). For durable runs that resume after crashes, wrap `run_agent` as a workflow activity. Temporal example:
+Lynx ships **no storage**. Pass `run_agent(..., store=..., run_id=...)` a
+`RunStore` you implement over whatever you already run. The whole contract:
+`append` must atomically reject a duplicate `(run_id, seq)` by raising
+`DuplicateRecord`; `load` returns a run's records ordered by `seq`. That
+uniqueness rule is what makes concurrent re-dispatch safe — the write-ahead
+intent journaled before each action *is* the claim.
+
+### In-memory (tests)
+
+```python
+from lynx import DuplicateRecord, StepRecord
+
+class MemoryRunStore:
+    def __init__(self):
+        self.records: dict[tuple[str, int], StepRecord] = {}
+
+    async def append(self, record: StepRecord) -> None:
+        key = (record.run_id, record.seq)
+        if key in self.records:
+            raise DuplicateRecord(f"{key} already journaled")
+        self.records[key] = record
+
+    async def load(self, run_id: str):
+        return sorted((r for (rid, _), r in self.records.items() if rid == run_id),
+                      key=lambda r: r.seq)
+```
+
+### Redis (`redis.asyncio`)
+
+`HSETNX` is the atomic insert-if-absent. **Plain `RPUSH` does NOT satisfy
+the contract** — a list happily accepts two records at the same position.
+
+```python
+from lynx import DuplicateRecord, StepRecord, step_record_from_json, step_record_to_json
+
+class RedisRunStore:
+    def __init__(self, redis):                      # redis.asyncio.Redis
+        self.redis = redis
+
+    async def append(self, record: StepRecord) -> None:
+        created = await self.redis.hsetnx(
+            f"lynx:run:{record.run_id}", str(record.seq), step_record_to_json(record)
+        )
+        if not created:
+            raise DuplicateRecord(f"({record.run_id}, {record.seq}) already journaled")
+
+    async def load(self, run_id: str):
+        raw = await self.redis.hgetall(f"lynx:run:{run_id}")
+        return sorted((step_record_from_json(v) for v in raw.values()),
+                      key=lambda r: r.seq)
+```
+
+### Postgres (`asyncpg`)
+
+The primary key does the work; catch the unique violation.
+
+```python
+import asyncpg
+from lynx import DuplicateRecord, StepRecord, step_record_from_json, step_record_to_json
+
+# CREATE TABLE lynx_runs (
+#     run_id TEXT, seq BIGINT, record JSONB NOT NULL,
+#     PRIMARY KEY (run_id, seq)
+# );
+
+class PostgresRunStore:
+    def __init__(self, pool):                       # asyncpg.Pool
+        self.pool = pool
+
+    async def append(self, record: StepRecord) -> None:
+        try:
+            await self.pool.execute(
+                "INSERT INTO lynx_runs (run_id, seq, record) VALUES ($1, $2, $3)",
+                record.run_id, record.seq, step_record_to_json(record),
+            )
+        except asyncpg.UniqueViolationError as exc:
+            raise DuplicateRecord(str(exc)) from exc
+
+    async def load(self, run_id: str):
+        rows = await self.pool.fetch(
+            "SELECT record FROM lynx_runs WHERE run_id = $1 ORDER BY seq", run_id
+        )
+        return [step_record_from_json(r["record"]) for r in rows]
+```
+
+### JSONL file (single process only)
+
+Fine for a laptop or CI; a flat file cannot enforce uniqueness across
+processes, so the supersede guarantee only holds within one process. Use the
+`step_record_to_json` format and `lynx trace <file>` can render it.
+
+### Picking a backend
+
+| Need | Backend |
+|---|---|
+| Tests / demos | dict (above) |
+| Survive a process crash, one machine | JSONL file or your SQLite |
+| Survive machine loss, multiple workers | Redis / Postgres / DynamoDB — *your* database |
+
+Durability needs no database; **distributed** durability needs *your*
+database. Lynx never restarts a dead process — your supervisor retries the
+`run_agent` call; the journal makes that retry cheap (no re-burned tokens)
+and safe (no double side effects).
+
+---
+
+## Durability — or wrap run_agent in a workflow engine
+
+If you already run Temporal/Restate/Inngest, you can skip RunStore entirely and let the engine own retries — wrap `run_agent` as an activity. Temporal example:
 
 ```python
 from datetime import timedelta

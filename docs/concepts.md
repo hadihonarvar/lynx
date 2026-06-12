@@ -63,7 +63,23 @@ The Policy Enforcement Point: `mediate(request, decision, tools, on_approval) ->
 
 ## Run
 
-Conceptually, one execution of `run_agent`. Not a stored entity — there is no `Run` class in v2. Each call generates a `correlation_id` (UUID4) that ties all its events together.
+Conceptually, one execution of `run_agent`. Not a stored entity — there is no `Run` class in v2. Each call generates a `correlation_id` (UUID4) that ties all its events together. (With a `RunStore`: a fresh run's `correlation_id` defaults to the `run_id`; any re-invocation gets `"<run_id>#<suffix>"` so `(correlation_id, seq)` never collides across attempts while staying groupable by prefix.)
+
+## RunStore / StepRecord (durability, opt-in)
+
+`RunStore` is the two-method protocol you implement over your own storage to make a run durable. Lynx ships no implementation — see the [integration cookbook](integration-cookbook.md) for Redis / Postgres / in-memory recipes.
+
+```python
+class RunStore(Protocol):
+    async def append(self, record: StepRecord) -> None: ...   # MUST raise DuplicateRecord on a duplicate (run_id, seq)
+    async def load(self, run_id: str) -> Sequence[StepRecord]: ...
+```
+
+`StepRecord` is one journal entry. `seq` is a per-record log offset (not a step number — the step lives in `body["step"]`); `(run_id, seq)` is the uniqueness key. Record kinds: `run.started`, `run.resumed`, `model.output`, `action.intent` (the write-ahead claim, journaled *before* execution), `action.result`, `final`.
+
+The kernel derives everything from the journal on resume: journaled model outputs replay without re-calling the model; journaled results replay without re-executing the action; an `action.intent` without a matching `action.result` marks the action *uncertain* and policy re-decides it with `context.extra.uncertain_retry: true`. `DuplicateRecord` from the store means another worker owns the run; the kernel returns `error="superseded: ..."` without executing anything.
+
+`replay(records)` (pure function) reconstructs a `RunView` of any journal; `idempotency_key(run_id, step, tool, args)` is the stable identity stamped on intent/result records.
 
 ## RunResult
 
@@ -134,8 +150,15 @@ No hash chain. No content addressing. Your sink decides retention.
 | `approval.requested` | `approve_required` verdict, before calling the handler |
 | `approval.granted` | Handler returned `granted=True` |
 | `approval.denied` | Handler returned `granted=False` |
-| `run.succeeded` | Agent returned FinalAnswer |
-| `run.failed` | Budget exhausted / agent.step raised |
+| `run.succeeded` | Agent returned FinalAnswer (body has `replayed: true` when a completed run was resumed) |
+| `run.failed` | Budget exhausted / agent.step raised / the RunStore failed mid-run |
+| `run.resumed` | A journaled run was picked up again (store + same run_id) |
+| `run.superseded` | This worker lost the journal race to another worker and exited without executing anything |
+| `run.bundle_changed` | A resume is running under a different policy bundle than the journal was written with — warn-and-continue |
+| `step.replayed` | A completed step was fed back from the journal — no policy re-evaluation, no execution |
+| `action.uncertain` | An intent was journaled without a result in a prior attempt — the action *may* have executed; policy sees `context.extra.uncertain_retry: true` |
+
+The last five only occur when a `RunStore` is passed to `run_agent`.
 
 ## Principal
 

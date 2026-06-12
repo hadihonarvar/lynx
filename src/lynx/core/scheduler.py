@@ -1,7 +1,8 @@
 """Scheduler — v2.
 
 A single pure-ish async function: ``run_agent``. No classes. No globals.
-The agent step loop with policy enforcement and streaming audit events.
+The agent step loop with policy enforcement, streaming audit events, and
+(opt-in) durable journaling to a user-owned ``RunStore``.
 """
 
 from __future__ import annotations
@@ -9,8 +10,9 @@ from __future__ import annotations
 import asyncio
 import sys
 import time
-from collections.abc import Sequence
-from typing import TYPE_CHECKING
+from collections.abc import Mapping, Sequence
+from types import MappingProxyType
+from typing import TYPE_CHECKING, Any
 
 from lynx.core.mediator import mediate
 from lynx.core.policy import PolicyBundle, evaluate
@@ -28,14 +30,46 @@ from lynx.core.types import (
     new_correlation_id,
     now_utc,
 )
+from lynx.durability import (
+    DuplicateRecord,
+    JournalIndex,
+    StepRecord,
+    action_from_body,
+    action_to_body,
+    idempotency_key,
+    index_journal,
+    is_uncertain,
+)
 
 if TYPE_CHECKING:
     from lynx.approvals import ApprovalHandler
+    from lynx.durability import RunStore
     from lynx.sdk import Agent
     from lynx.sinks import Sink
 
 
 __all__ = ["run_agent"]
+
+
+class _StoreFailed(Exception):
+    """Internal: the user's RunStore raised. The run must stop — executing
+    side effects that cannot be journaled would silently void the
+    no-double-execution guarantee."""
+
+
+_EMPTY_EXTRA: Mapping[str, Any] = MappingProxyType({})
+_UNCERTAIN_EXTRA: Mapping[str, Any] = MappingProxyType({"uncertain_retry": True})
+
+_EMPTY_INDEX = JournalIndex(
+    records=0,
+    attempts=1,
+    proposals={},
+    orphan_intents={},
+    results={},
+    final_body=None,
+    last_bundle_id=None,
+    next_seq=0,
+)
 
 
 async def run_agent(
@@ -51,8 +85,10 @@ async def run_agent(
     environment: str = "dev",
     workspace: str = ".",
     correlation_id: str | None = None,
+    store: RunStore | None = None,
+    run_id: str | None = None,
 ) -> RunResult:
-    """Run an agent through one task. Stateless.
+    """Run an agent through one task. Stateless unless you pass a store.
 
     Args:
         agent:        Anything implementing ``async step(conversation) -> ToolCall | FinalAnswer``.
@@ -61,26 +97,72 @@ async def run_agent(
         policy:       Compiled PolicyBundle (use compile_policy / load_policy_file).
         sinks:        Iterable of Sink callables. Each event is fanned out.
         on_approval:  Sync handler for APPROVE_REQUIRED. Defaults to auto-deny.
-        budget:       Hard caps on steps / duration / tokens.
+        budget:       Hard caps on steps / duration.
         principal:    Who the agent is acting on behalf of.
         environment:  e.g. "dev" / "staging" / "prod" — policy can match on this.
         workspace:    Filesystem context the agent works in.
-        correlation_id: Optional override; new UUID4 generated if None.
+        correlation_id: Optional override. Default: the ``run_id`` for a
+                      fresh journaled run; ``"<run_id>#<suffix>"`` for any
+                      re-invocation of a journaled run (so (correlation_id,
+                      seq) stays unique across attempts while remaining
+                      groupable by run_id prefix); a new UUID4 otherwise.
+        store:        Optional user-owned ``RunStore``. When set, the run is
+                      journaled and ``run_id`` becomes required. Re-invoking
+                      with the same ``run_id`` resumes: journaled model
+                      outputs are replayed (the model is not re-called) and
+                      journaled action results are returned without
+                      re-executing the action.
+        run_id:       Stable, non-empty identifier for the journaled run.
+                      Required with ``store``; pick something your
+                      retry/queue layer keeps stable across attempts.
 
     Returns:
-        ``RunResult`` with final_answer, error, steps_taken, correlation_id, bundle_id.
+        ``RunResult`` with final_answer, error, steps_taken, correlation_id,
+        bundle_id. If another worker overtakes the run (the store reports a
+        duplicate journal position), ``error`` starts with ``"superseded:"``
+        — that prefix is a stable, documented part of the API.
+
+    Durability semantics (only with a store):
+      * Write-ahead intent: every action is journaled before it executes.
+        A crash after the intent but before the result leaves the action
+        *uncertain* — on resume it is re-proposed to policy with
+        ``context.extra.uncertain_retry = True`` so rules can deny it,
+        require approval, or let idempotent tools re-run.
+      * Budgets count replayed steps too, and ``duration_seconds`` is
+        per-attempt (monotonic clock of the current process). To continue a
+        run that exhausted its step budget, resume it with a larger budget.
+      * Tool args and results should be JSON-serializable (LLM tool calls
+        always are); non-JSON values degrade to ``repr()`` in stores that
+        serialize, which makes replayed values drift.
+      * Resuming with a different policy bundle than the journal was written
+        with emits a ``run.bundle_changed`` warning event and continues;
+        replayed results always reflect what actually happened, not what
+        current policy would decide. Resuming with a different ToolSet, or
+        with an agent that is not a pure function of the conversation
+        (e.g. the single-shot CrewAI adapter), is out of contract.
+      * Lynx does not restart dead processes — your supervisor does. Lynx
+        makes the restart cheap (no re-burned tokens) and safe (no double
+        side effects).
 
     No state is held after this function returns. Sinks are called as events
     happen and never buffered. The conversation is freed at function exit.
     """
     from lynx.approvals import auto_deny  # local import to avoid cycle
 
+    if store is not None and not run_id:
+        raise ValueError(
+            "a non-empty run_id is required when store is provided — resume needs "
+            "a stable identifier your retry layer keeps constant across attempts"
+        )
+
     on_approval = on_approval or auto_deny("no on_approval handler configured")
-    cid = correlation_id or new_correlation_id()
+    cid = correlation_id or run_id or new_correlation_id()
     sinks_tuple: tuple[Sink, ...] = tuple(sinks)
 
     started_monotonic = time.monotonic()
     seq_counter = 0
+    started_emitted = False
+    step_seq = 0
 
     async def emit(kind: str, body_payload: dict) -> int:
         nonlocal seq_counter
@@ -111,187 +193,362 @@ async def run_agent(
                     )
         return event.seq
 
-    await emit("run.started", {"task": task, "principal_id": principal.id})
+    idx = _EMPTY_INDEX
+    journal_seq = 0
 
-    conversation: tuple[Message, ...] = (Message(role="user", content=task),)
-    step_seq = 0
-
-    while True:
-        # ---- budget enforcement
-        if budget.steps is not None and step_seq >= budget.steps:
-            await emit("run.failed", {"reason": f"step budget {budget.steps} exhausted"})
-            return RunResult(
-                correlation_id=cid,
-                bundle_id=policy.id,
-                error=f"step budget exhausted ({budget.steps})",
-                steps_taken=step_seq,
-            )
-        if (
-            budget.duration_seconds is not None
-            and time.monotonic() - started_monotonic >= budget.duration_seconds
-        ):
-            await emit("run.failed", {"reason": "duration budget exhausted"})
-            return RunResult(
-                correlation_id=cid,
-                bundle_id=policy.id,
-                error=f"duration budget exhausted ({budget.duration_seconds}s)",
-                steps_taken=step_seq,
-            )
-
-        # ---- ask agent for next action
+    async def journal(kind: str, body: dict[str, Any], idem: str = "") -> None:
+        """Append one record. DuplicateRecord propagates (it's the
+        superseded signal); any other store failure stops the run."""
+        nonlocal journal_seq
+        assert store is not None and run_id is not None
+        record = StepRecord(
+            run_id=run_id,
+            seq=journal_seq,
+            kind=kind,
+            idempotency_key=idem,
+            body=body,
+            timestamp=now_utc(),
+        )
         try:
-            action = await agent.step(conversation)
+            await store.append(record)
+        except (DuplicateRecord, asyncio.CancelledError):
+            raise
         except Exception as exc:
-            await emit("run.failed", {"reason": f"agent.step raised: {exc!r}"})
-            return RunResult(
-                correlation_id=cid,
-                bundle_id=policy.id,
-                error=f"agent.step raised: {type(exc).__name__}: {exc}",
-                steps_taken=step_seq,
-            )
+            raise _StoreFailed(f"store.append failed: {type(exc).__name__}: {exc}") from exc
+        journal_seq += 1
 
-        if isinstance(action, FinalAnswer):
-            await emit("run.succeeded", {"final_answer": action.text})
-            return RunResult(
-                correlation_id=cid,
-                bundle_id=policy.id,
-                final_answer=action.text,
-                steps_taken=step_seq,
-            )
+    try:
+        # ---- load + index the journal (before any event: the attempt
+        # number decides the correlation id)
+        if store is not None:
+            try:
+                prior = await store.load(run_id or "")
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                raise _StoreFailed(f"store.load failed: {type(exc).__name__}: {exc}") from exc
+            idx = index_journal(prior)
+            journal_seq = idx.next_seq
+            if idx.records and correlation_id is None:
+                # A re-invocation: give this attempt its own audit identity so
+                # (correlation_id, seq) never collides with a prior attempt's
+                # events, while staying groupable by the run_id prefix.
+                cid = f"{run_id}#{new_correlation_id()[:8]}"
 
-        assert isinstance(action, ToolCall)
+        await emit("run.started", {"task": task, "principal_id": principal.id})
+        started_emitted = True
 
-        # Always record the assistant's tool-call attempt FIRST so adapters
-        # translating to provider-specific shapes (Anthropic tool_use blocks,
-        # OpenAI tool_calls) emit a well-formed assistant→tool alternation.
-        assistant_call_id = action.call_id or f"step_{step_seq}"
-        conversation = (
-            *conversation,
-            Message(
-                role="assistant",
-                content="",
-                name=action.tool,
-                tool_call_id=assistant_call_id,
-                tool_call_args=dict(action.args),
-            ),
-        )
-
-        # ---- build the ActionRequest using tool's declared metadata
-        try:
-            tool_def = tools.get(action.tool)
-        except KeyError:
+        if store is not None and idx.last_bundle_id is not None and idx.last_bundle_id != policy.id:
             await emit(
-                "step.proposed",
-                {"seq": step_seq, "tool": action.tool, "args": dict(action.args)},
-            )
-            denial_msg = f"unknown tool: {action.tool!r}"
-            await emit("action.failed", {"seq": step_seq, "reason": denial_msg})
-            conversation = (
-                *conversation,
-                Message(
-                    role="tool",
-                    content=f"[error] {denial_msg}",
-                    tool_call_id=assistant_call_id,
-                    name=action.tool,
-                ),
-            )
-            step_seq += 1
-            continue
-
-        request = ActionRequest(
-            tool=action.tool,
-            args=dict(action.args),
-            declared=tool_def.metadata,
-            context=ExecutionContext(
-                principal=principal,
-                environment=environment,
-                workspace=workspace,
-                correlation_id=cid,
-                step_seq=step_seq,
-                timestamp=now_utc(),
-            ),
-        )
-
-        await emit(
-            "step.proposed",
-            {"seq": step_seq, "tool": request.tool, "args": dict(request.args)},
-        )
-
-        # ---- policy decision (pure function)
-        decision = evaluate(policy, request, request.context)
-        await emit(
-            "policy.evaluated",
-            {
-                "seq": step_seq,
-                "verdict": decision.verdict.value,
-                "reason": decision.reason,
-                "matched_rules": list(decision.matched_rules),
-            },
-        )
-
-        # ---- mediate the action
-        action_kind = "action.dry_run" if decision.verdict.value == "dry_run" else "action.started"
-        await emit(action_kind, {"seq": step_seq, "verdict": decision.verdict.value})
-
-        if decision.verdict.value == "approve_required":
-            await emit(
-                "approval.requested",
-                {"seq": step_seq, "approvers": list(decision.approvers)},
-            )
-
-        result = await mediate(request, decision, tools, on_approval)
-
-        if decision.verdict.value == "approve_required":
-            await emit(
-                "approval.granted" if result.ok else "approval.denied",
+                "run.bundle_changed",
                 {
-                    "seq": step_seq,
-                    "ok": result.ok,
-                    "error": result.error,
+                    "journaled_bundle_id": idx.last_bundle_id,
+                    "current_bundle_id": policy.id,
+                    "detail": "resuming under a different policy than the journal was written with",
                 },
             )
 
-        if result.ok:
-            completed_kind = (
-                "action.dry_run_completed"
-                if decision.verdict.value == "dry_run"
-                else "action.completed"
+        # ---- a completed run resumes to the same answer, idempotently
+        if idx.final_body is not None:
+            answer = idx.final_body.get("final_answer")
+            await emit("run.succeeded", {"final_answer": answer, "replayed": True})
+            return RunResult(
+                correlation_id=cid,
+                bundle_id=policy.id,
+                final_answer=answer,
+                steps_taken=int(idx.final_body.get("step", 0)),
             )
-            await emit(
-                completed_kind,
-                {"seq": step_seq, "duration_ms": result.duration_ms},
-            )
-            tag = "[dry_run]" if decision.verdict.value == "dry_run" else "[ok]"
-            conversation = (
-                *conversation,
-                Message(
-                    role="tool",
-                    content=f"{tag} {result.value}",
-                    tool_call_id=assistant_call_id,
-                    name=request.tool,
-                ),
-            )
-        else:
-            # Map verdict → audit event kind so downstream consumers can
-            # bucket denials separately from tool failures.
-            if decision.verdict.value == "deny":
-                fail_kind = "action.denied"
-                tag = "[denied]"
-            elif decision.verdict.value == "approve_required":
-                fail_kind = "action.denied"
-                tag = "[denied]"
+
+        # ---- claim the journal before any model call, so two simultaneous
+        # workers resolve here with zero wasted tokens
+        if store is not None:
+            if idx.records:
+                await journal("run.resumed", {"records": idx.records, "bundle_id": policy.id})
+                await emit("run.resumed", {"records": idx.records, "attempt": idx.attempts + 1})
             else:
-                fail_kind = "action.failed"
-                tag = "[error]"
-            await emit(fail_kind, {"seq": step_seq, "reason": result.error})
+                await journal("run.started", {"task": task, "bundle_id": policy.id})
+
+        conversation: tuple[Message, ...] = (Message(role="user", content=task),)
+
+        while True:
+            # ---- budget enforcement
+            if budget.steps is not None and step_seq >= budget.steps:
+                await emit("run.failed", {"reason": f"step budget {budget.steps} exhausted"})
+                return RunResult(
+                    correlation_id=cid,
+                    bundle_id=policy.id,
+                    error=f"step budget exhausted ({budget.steps})",
+                    steps_taken=step_seq,
+                )
+            if (
+                budget.duration_seconds is not None
+                and time.monotonic() - started_monotonic >= budget.duration_seconds
+            ):
+                await emit("run.failed", {"reason": "duration budget exhausted"})
+                return RunResult(
+                    correlation_id=cid,
+                    bundle_id=policy.id,
+                    error=f"duration budget exhausted ({budget.duration_seconds}s)",
+                    steps_taken=step_seq,
+                )
+
+            # ---- next action: replay the journal if it has this step,
+            # otherwise ask the agent (and journal what it said)
+            replayed_proposal = idx.proposals.get(step_seq)
+            if replayed_proposal is not None:
+                action = action_from_body(replayed_proposal)
+            else:
+                try:
+                    action = await agent.step(conversation)
+                except Exception as exc:
+                    await emit("run.failed", {"reason": f"agent.step raised: {exc!r}"})
+                    return RunResult(
+                        correlation_id=cid,
+                        bundle_id=policy.id,
+                        error=f"agent.step raised: {type(exc).__name__}: {exc}",
+                        steps_taken=step_seq,
+                    )
+                if store is not None:
+                    await journal("model.output", action_to_body(action, step_seq))
+
+            if isinstance(action, FinalAnswer):
+                # Journal the final answer BEFORE announcing success, so a
+                # crash in between resumes to "already final", not a re-run.
+                if store is not None:
+                    await journal("final", {"step": step_seq, "final_answer": action.text})
+                await emit("run.succeeded", {"final_answer": action.text})
+                return RunResult(
+                    correlation_id=cid,
+                    bundle_id=policy.id,
+                    final_answer=action.text,
+                    steps_taken=step_seq,
+                )
+
+            assert isinstance(action, ToolCall)
+
+            # Always record the assistant's tool-call attempt FIRST so adapters
+            # translating to provider-specific shapes (Anthropic tool_use blocks,
+            # OpenAI tool_calls) emit a well-formed assistant→tool alternation.
+            assistant_call_id = action.call_id or f"step_{step_seq}"
             conversation = (
                 *conversation,
                 Message(
-                    role="tool",
-                    content=f"{tag} {result.error}",
+                    role="assistant",
+                    content="",
+                    name=action.tool,
                     tool_call_id=assistant_call_id,
-                    name=request.tool,
+                    tool_call_args=dict(action.args),
                 ),
             )
 
-        step_seq += 1
+            # ---- replay a journaled result: the action already happened in a
+            # prior attempt; feed the recorded outcome back without policy
+            # re-evaluation (the journal records what HAPPENED) or execution.
+            replayed_result = idx.results.get(step_seq)
+            if replayed_result is not None:
+                await emit(
+                    "step.replayed",
+                    {
+                        "seq": step_seq,
+                        "tool": replayed_result.get("tool"),
+                        "ok": replayed_result.get("ok"),
+                        "verdict": replayed_result.get("verdict"),
+                    },
+                )
+                conversation = (
+                    *conversation,
+                    Message(
+                        role="tool",
+                        content=str(replayed_result.get("message", "")),
+                        tool_call_id=assistant_call_id,
+                        name=action.tool,
+                    ),
+                )
+                step_seq += 1
+                continue
+
+            # ---- uncertain retry: a prior attempt journaled an intent for
+            # this step but no result — the action MAY have executed. Flag it
+            # so policy can decide (deny / approve_required / re-run).
+            orphan = idx.orphan_intents.get(step_seq)
+            uncertain = orphan is not None and is_uncertain(orphan)
+
+            # ---- build the ActionRequest using tool's declared metadata
+            try:
+                tool_def = tools.get(action.tool)
+            except KeyError:
+                await emit(
+                    "step.proposed",
+                    {"seq": step_seq, "tool": action.tool, "args": dict(action.args)},
+                )
+                if uncertain:
+                    # Surface the orphan even though the tool is now unknown
+                    # (resuming with a changed ToolSet is out of contract,
+                    # but a possibly-executed action must never go silent).
+                    await emit(
+                        "action.uncertain",
+                        {
+                            "seq": step_seq,
+                            "tool": action.tool,
+                            "intent_key": orphan.idempotency_key if orphan else "",
+                            "reason": "intent journaled without result — action may have executed",
+                        },
+                    )
+                denial_msg = f"unknown tool: {action.tool!r}"
+                await emit("action.failed", {"seq": step_seq, "reason": denial_msg})
+                conversation = (
+                    *conversation,
+                    Message(
+                        role="tool",
+                        content=f"[error] {denial_msg}",
+                        tool_call_id=assistant_call_id,
+                        name=action.tool,
+                    ),
+                )
+                step_seq += 1
+                continue
+
+            request = ActionRequest(
+                tool=action.tool,
+                args=dict(action.args),
+                declared=tool_def.metadata,
+                context=ExecutionContext(
+                    principal=principal,
+                    environment=environment,
+                    workspace=workspace,
+                    correlation_id=cid,
+                    step_seq=step_seq,
+                    timestamp=now_utc(),
+                    extra=_UNCERTAIN_EXTRA if uncertain else _EMPTY_EXTRA,
+                ),
+            )
+
+            await emit(
+                "step.proposed",
+                {"seq": step_seq, "tool": request.tool, "args": dict(request.args)},
+            )
+            if uncertain:
+                await emit(
+                    "action.uncertain",
+                    {
+                        "seq": step_seq,
+                        "tool": request.tool,
+                        "intent_key": orphan.idempotency_key if orphan else "",
+                        "reason": "intent journaled without result — action may have executed",
+                    },
+                )
+
+            # ---- policy decision (pure function)
+            decision = evaluate(policy, request, request.context)
+            verdict = decision.verdict.value
+            await emit(
+                "policy.evaluated",
+                {
+                    "seq": step_seq,
+                    "verdict": verdict,
+                    "reason": decision.reason,
+                    "matched_rules": list(decision.matched_rules),
+                },
+            )
+
+            # ---- write-ahead intent: the claim. Journaled BEFORE execution;
+            # if this append loses a race, DuplicateRecord supersedes the run
+            # before any side effect. (Args live in the step's model.output
+            # record; the key hashes them, so the intent stays slim.)
+            action_key = ""
+            if store is not None:
+                action_key = idempotency_key(run_id or "", step_seq, request.tool, request.args)
+                await journal(
+                    "action.intent",
+                    {"step": step_seq, "tool": request.tool, "verdict": verdict},
+                    idem=action_key,
+                )
+
+            # ---- mediate the action
+            action_kind = "action.dry_run" if verdict == "dry_run" else "action.started"
+            await emit(action_kind, {"seq": step_seq, "verdict": verdict})
+
+            if verdict == "approve_required":
+                await emit(
+                    "approval.requested",
+                    {"seq": step_seq, "approvers": list(decision.approvers)},
+                )
+
+            result = await mediate(request, decision, tools, on_approval)
+
+            # ---- one ladder decides both the conversation tag and the audit
+            # event kind, so they can never drift apart.
+            if result.ok:
+                if verdict == "dry_run":
+                    tag, outcome_kind = "[dry_run]", "action.dry_run_completed"
+                else:
+                    tag, outcome_kind = "[ok]", "action.completed"
+                tool_message = f"{tag} {result.value}"
+            else:
+                if verdict in ("deny", "approve_required"):
+                    # Bucketed as denials so consumers can separate policy
+                    # refusals from tool failures.
+                    tag, outcome_kind = "[denied]", "action.denied"
+                else:
+                    tag, outcome_kind = "[error]", "action.failed"
+                tool_message = f"{tag} {result.error}"
+
+            if verdict == "approve_required":
+                await emit(
+                    "approval.granted" if result.ok else "approval.denied",
+                    {"seq": step_seq, "ok": result.ok, "error": result.error},
+                )
+
+            if result.ok:
+                await emit(outcome_kind, {"seq": step_seq, "duration_ms": result.duration_ms})
+            else:
+                await emit(outcome_kind, {"seq": step_seq, "reason": result.error})
+
+            # ---- journal the result: it closes the uncertainty window.
+            # After the audit emits, so an executed action always has its
+            # outcome on the audit stream even if this append fails.
+            if store is not None:
+                result_body: dict[str, Any] = {
+                    "step": step_seq,
+                    "tool": request.tool,
+                    "verdict": verdict,
+                    "ok": result.ok,
+                    "error": result.error,
+                    "duration_ms": result.duration_ms,
+                    "message": tool_message,
+                }
+                if uncertain:
+                    # Forensics: this result resolved an uncertain retry; the
+                    # original attempt may still have executed.
+                    result_body["uncertain_retry"] = True
+                await journal("action.result", result_body, idem=action_key)
+
+            conversation = (
+                *conversation,
+                Message(
+                    role="tool",
+                    content=tool_message,
+                    tool_call_id=assistant_call_id,
+                    name=request.tool,
+                ),
+            )
+            step_seq += 1
+
+    except DuplicateRecord as dup:
+        await emit("run.superseded", {"detail": str(dup) or "duplicate journal position"})
+        return RunResult(
+            correlation_id=cid,
+            bundle_id=policy.id,
+            error=f"superseded: another worker is executing run {run_id!r}",
+            steps_taken=step_seq,
+        )
+    except _StoreFailed as exc:
+        if not started_emitted:
+            await emit("run.started", {"task": task, "principal_id": principal.id})
+        await emit("run.failed", {"reason": str(exc)})
+        return RunResult(
+            correlation_id=cid,
+            bundle_id=policy.id,
+            error=str(exc),
+            steps_taken=step_seq,
+        )

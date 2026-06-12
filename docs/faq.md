@@ -11,7 +11,7 @@ Wherever you point the sinks. v2 holds nothing. Common choices:
 - `jsonl_sink(open("audit.jsonl", "a"))` — to disk; you own retention
 - Custom `callback_sink(fn)` — ship to OTel, Datadog, Splunk, your bus
 
-See the [integration cookbook](integration-cookbook.md) for ready-to-paste recipes covering SQLite, PostgreSQL, OpenTelemetry, Splunk HEC, generic HTTP POST, Slack approvals, and wrapping `run_agent` in Temporal for durability.
+See the [integration cookbook](integration-cookbook.md) for ready-to-paste recipes covering SQLite, PostgreSQL, OpenTelemetry, Splunk HEC, generic HTTP POST, Slack approvals, and durability `RunStore` backends (Redis / Postgres / files — or wrapping `run_agent` in Temporal).
 
 ### Can I get the v1 hash-chained audit chain?
 
@@ -34,7 +34,7 @@ The `run_agent` call blocks on your handler. Lynx stays stateless; your handler 
 
 ### What happens if my process crashes mid-run?
 
-The run is lost. v2 does not survive a process restart. If you need that, use [Temporal](https://temporal.io) for the orchestration layer + Lynx for the policy layer, or pin v1.
+Without a store: the run is lost — that's the stateless default. With a `RunStore` (`run_agent(..., store=my_store, run_id="...")`): your supervisor retries the call and the run resumes at the first incomplete step — the model is not re-called for completed steps and journaled actions are not re-executed. You implement the store (two methods) over your own Redis/Postgres/anything; Lynx ships no storage. See the [integration cookbook](integration-cookbook.md) for recipes. If you already run [Temporal](https://temporal.io), wrapping `run_agent` as an activity remains a fine alternative.
 
 ### Is there a Runtime singleton?
 

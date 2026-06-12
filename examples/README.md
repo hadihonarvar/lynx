@@ -1,8 +1,8 @@
 # examples/
 
-A learning path of 23 examples. Each is **self-contained** and starts with a plain-language SCENARIO explaining the problem it solves.
+A learning path of 24 examples. Each is **self-contained** and starts with a plain-language SCENARIO explaining the problem it solves.
 
-Read 01–12 in order for the core narrative; 13–23 cover every remaining feature for full coverage.
+Read 01–12 in order for the core narrative; 13–24 cover every remaining feature for full coverage.
 
 ```
 SIMPLE          01 → 02 → 03         "see the system working"
@@ -10,13 +10,14 @@ MORE COMPLEX    04 → 05 → 06         "approvals, real LLMs, streaming audit"
 ADVANCED        07 → 08 → 09         "production patterns: rules, transforms, web service"
 COMPLETE        10                   "the full thing — one realistic DevOps scenario"
 INTEGRATIONS    11 (Flask) 12 (Django)   "drop Lynx into your existing web framework"
-FULL COVERAGE   13 → 23              "every feature: python rules, transform ops,
+FULL COVERAGE   13 → 24              "every feature: python rules, transform ops,
                                        custom sinks, cross-process approval,
                                        shadow helpers, sandbox, hot-swap,
-                                       MCP, LangGraph, CrewAI, error model"
+                                       MCP, LangGraph, CrewAI, error model,
+                                       durable crash-resume"
 ```
 
-## The 23 examples
+## The 24 examples
 
 | # | File | Verdict shown | Problem in one line |
 |---|------|--------------|---------------------|
@@ -43,6 +44,7 @@ FULL COVERAGE   13 → 23              "every feature: python rules, transform o
 | 21 | [`21_langgraph_demo.py`](21_langgraph_demo.py) | LangGraph adapter | "Wrap a compiled LangGraph state graph in `LangGraphAgent` so its tool nodes go through policy." |
 | 22 | [`22_crewai_demo.py`](22_crewai_demo.py) | CrewAI adapter | "Wrap a Crew in `CrewAIAgent`. Single-shot tradeoff documented inline." |
 | 23 | [`23_compile_errors.py`](23_compile_errors.py) | `PolicyCompileError` | "Every bad policy now fails loudly at compile time instead of silently never matching — drop into CI." |
+| 24 | [`24_durable_resume.py`](24_durable_resume.py) | `RunStore` durability | "Crash mid-run, retry with the same run_id — the model isn't re-called and the customer isn't double-charged." |
 
 ## How to run any of them
 
@@ -50,7 +52,7 @@ FULL COVERAGE   13 → 23              "every feature: python rules, transform o
 # Set up once
 pip install -e ".[dev]"
 
-# Examples 01-04, 06-08, 10, 13-19, 23 — no API key, no extras needed
+# Examples 01-04, 06-08, 10, 13-19, 23, 24 — no API key, no extras needed
 python examples/01_hello_allow.py
 python examples/02_block_dangerous.py
 python examples/03_preview_writes.py
@@ -67,6 +69,7 @@ python examples/17_shadow_helpers.py
 python examples/18_sandboxed_tool.py
 python examples/19_hot_swap.py
 python examples/23_compile_errors.py
+python examples/24_durable_resume.py
 
 # Example 05 — needs a real LLM API key
 export ANTHROPIC_API_KEY=sk-ant-...     # or OPENAI_API_KEY=sk-...
@@ -131,6 +134,7 @@ There is no `lynx ps` / `lynx trace` / `lynx audit` — v2 holds no past runs.
 | LangGraph integration | `LangGraphAgent(compiled_graph=...)` | 21 |
 | CrewAI integration | `CrewAIAgent(crew=...)` — single-shot tradeoff | 22 |
 | `PolicyCompileError` | Every malformed policy fails at compile time, not at runtime | 23 |
+| Durability / `RunStore` | Crash-resume, idempotent re-runs, `superseded` losers, `replay()` | 24 |
 | Web service integration | FastAPI / Flask / Django | 09 / 11 / 12 |
 | Real LLM | ClaudeAgent / OpenAIAgent (proper `async with` lifetime) | 05 |
 

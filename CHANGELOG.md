@@ -5,7 +5,21 @@ All notable changes to Lynx will be documented here. Format follows [Keep a Chan
 ## [Unreleased]
 
 ### Added
-- (nothing yet)
+- **Durability (opt-in)** — `run_agent(..., store=, run_id=)` journals the run to a user-implemented `RunStore` (Lynx ships **no storage**; the protocol is two methods over your Redis/Postgres/Dynamo/dict). Re-invoking with the same `run_id` resumes: journaled model outputs replay without re-calling the model, journaled action results replay without re-executing the action, and a completed run returns the same `RunResult` forever.
+- `StepRecord`, `RunStore`, `DuplicateRecord`, `idempotency_key()`, `step_record_to_json()` / `step_record_from_json()` — the journal vocabulary, exported from `lynx`.
+- **Write-ahead intents + the unique-append concurrency model**: every action journals an `action.intent` before executing; `append` must atomically reject a duplicate `(run_id, seq)` with `DuplicateRecord`, so two racing workers resolve to one winner — the loser returns `error="superseded: ..."` having executed nothing. No leases, no TTLs.
+- **Uncertain-action handling**: an intent journaled without a result (crash mid-action) is re-proposed to policy on resume with `context.extra.uncertain_retry: true`, so policy decides whether it re-runs, is denied, or escalates to approval.
+- `replay(records)` — pure function reconstructing a `RunView` (steps, verdicts, outcomes, uncertain actions, attempts) from any journal.
+- `lynx trace <records.jsonl>` CLI command rendering a journaled run.
+- New audit event kinds: `run.resumed`, `run.superseded`, `run.bundle_changed` (resume under a different policy than the journal — warn-and-continue), `step.replayed`, `action.uncertain`; `run.succeeded` body gains `replayed: true` when a finished run is re-invoked. Store-less runs emit exactly the same events as before.
+- `replay()` keeps forensics honest: a result that resolved an uncertain retry is marked `resolved_uncertain` in its `StepView` — a denied retry does not erase the fact that the original attempt may have executed.
+- `lynx trace` refuses to merge multiple runs from one file (asks for `--run-id`) and detects audit-sink files passed by mistake.
+- Example 24 (`24_durable_resume.py`): crash → resume → exactly one charge, plus supersede and `replay()`.
+- Integration cookbook: `RunStore` recipes for Redis (`HSETNX`), Postgres (`PRIMARY KEY` + unique-violation), in-memory, and JSONL files.
+
+### Changed
+- `correlation_id` defaults: a fresh journaled run uses the `run_id`; any re-invocation gets `"<run_id>#<suffix>"` so `(correlation_id, seq)` stays unique across attempts (sinks that key on it never overwrite a prior attempt's events) while remaining groupable by prefix.
+- If the `RunStore` itself fails mid-run (`append`/`load` raised), the run stops with a structured `store.append failed` / `store.load failed` error instead of continuing to execute side effects that cannot be journaled. `steps_taken` is preserved on all durability exit paths, and `run.started` is always the first audit event even when `store.load` fails.
 
 ## [2.1.0] — 2026-06-11
 

@@ -20,7 +20,7 @@ What v2 is:
 
 What v2 is NOT:
 - Not a database. Not a runtime daemon. Not a control plane.
-- Not the durability layer (that's Temporal / Restate).
+- Not the durability layer (that's Temporal / Restate). *(Since v2.2 the kernel can journal runs to a user-implemented `RunStore` for crash-resume and idempotent retries — but storage itself remains yours; Lynx still ships none.)*
 - Not the observability stack (that's OTel / Prometheus / Datadog).
 - Not the audit storage (that's whatever your sink writes to).
 - Not the prompt-injection filter (that's NeMo / Guardrails AI / Lakera).

@@ -51,11 +51,12 @@ result = await run_agent(
 - **Immutable values.** Every public type is `frozen=True, slots=True`. Mutation raises at runtime; mypy catches it at write time.
 - **No globals.** No tool registry, no broker, no module-level state. ToolSet is built explicitly at call site.
 - **Hot-swappable policy.** Pass a different `PolicyBundle` on the next `run_agent` call — the bundle is an immutable value; the kernel holds nothing between calls. (Mid-run reload is not supported; build a new bundle and use it on the next run.)
+- **Durable runs, no double side effects** *(opt-in)*. Pass a `RunStore` you implement over your own storage and a stable `run_id`: a crashed run resumes at the first incomplete step — the model is not re-called for completed steps (no re-burned tokens) and journaled actions are not re-executed (no double charges). Two racing workers resolve to one winner; the loser exits `superseded` before executing anything.
 
 ## What v2 does NOT do
 
-- **No durability layer** — that's [Temporal](https://temporal.io). v2 does not survive a process restart.
-- **No audit storage** — your sink decides where events go. We never open a file.
+- **No storage** — durability journals to a `RunStore` *you* implement on *your* Redis/Postgres/Dynamo (the contract is two methods and one sentence); audit events stream to *your* sinks. Lynx never opens a file or a connection.
+- **No process supervision** — Lynx does not restart dead workers; your supervisor (systemd, k8s, a queue) does. Lynx makes the restart cheap and safe.
 - **No prompt filtering** — that's [NeMo Guardrails](https://github.com/NVIDIA/NeMo-Guardrails) or [Guardrails AI](https://github.com/guardrails-ai/guardrails).
 - **No cluster orchestration** — that's [Temporal](https://temporal.io) or [Inngest](https://www.inngest.com).
 - **No agent framework** — that's [LangGraph](https://langchain-ai.github.io/langgraph/) / [CrewAI](https://www.crewai.com); we wrap them via adapters.
@@ -396,6 +397,69 @@ await run_agent(..., on_approval=callback_approval(slack_approval))
 
 The `run_agent` call blocks on the handler. No queue. No broker. No cross-process resume. Your handler decides how to wait.
 
+## Durability — crash-resume without double side effects
+
+Opt in by passing a `RunStore` (your storage, your dependency) and a stable `run_id`:
+
+```python
+result = await run_agent(
+    agent, task,
+    tools=tools, policy=policy,
+    store=my_store,                 # you implement two methods (below)
+    run_id="invoice-2026-0611",     # stable across retries
+)
+# Process dies mid-run? Your supervisor retries the same call.
+# Completed steps replay from the journal: the model is NOT re-called,
+# journaled actions are NOT re-executed. A finished run returns the same
+# answer forever. Two racing workers resolve to one; the loser returns
+# error="superseded: ..." having executed nothing.
+```
+
+The whole `RunStore` contract:
+
+```python
+class MyStore:                       # Redis / Postgres / Dynamo / a dict
+    async def append(self, record: StepRecord) -> None:
+        # MUST atomically raise DuplicateRecord if (run_id, seq) exists.
+        # Postgres: PRIMARY KEY (run_id, seq). Redis: HSETNX. That's it.
+        ...
+    async def load(self, run_id: str) -> Sequence[StepRecord]:
+        ...                          # ordered by seq
+```
+
+That one uniqueness rule is the concurrency story: the write-ahead intent
+journaled before every action *is* the claim — no leases, no TTLs, nothing
+to clean up when a worker dies. See
+[`examples/24_durable_resume.py`](examples/24_durable_resume.py) for a
+complete ~15-line store plus crash, resume, and supersede in action, and
+[`docs/integration-cookbook.md`](docs/integration-cookbook.md) for Redis /
+Postgres / file-backed recipes.
+
+**The crash window, handled honestly.** If a worker dies *between* executing
+an action and journaling its result, the action *may* have run. On resume,
+Lynx re-proposes it to policy with `context.extra.uncertain_retry: true` —
+so your policy decides: re-run it (idempotent tools), deny it, or escalate
+to a human:
+
+```yaml
+- id: never-rerun-uncertain-payments
+  match: { context.extra.uncertain_retry: true, declared.reversible: false }
+  decision: approve_required
+```
+
+Inspect any journal with `replay(records)` (pure function) or `lynx trace
+records.jsonl` (for file-backed stores).
+
+Scope, honestly: Lynx does not restart dead processes (your supervisor does);
+durability needs no database, but *distributed* durability — runs surviving
+machine loss, multiple workers — needs *your* database. Budgets count
+replayed steps (resume a budget-exhausted run by passing a larger budget);
+`duration_seconds` is per-attempt. Tool args/results should be
+JSON-serializable (LLM tool calls always are). Resuming under a different
+policy emits a `run.bundle_changed` warning; resuming with a different
+ToolSet, or with an agent that isn't a pure function of the conversation
+(e.g. the single-shot CrewAI adapter), is out of contract.
+
 ## Examples
 
 | # | File | What it shows |
@@ -413,12 +477,13 @@ The `run_agent` call blocks on the handler. No queue. No broker. No cross-proces
 | 11 | [`11_flask_service.py`](examples/11_flask_service.py) | Flask integration |
 | 12 | [`12_django_service.py`](examples/12_django_service.py) | Django integration |
 
-## CLI — five commands
+## CLI — six commands
 
 ```
 lynx --version
 lynx init                        # writes policy.yaml (only)
 lynx run <script>                # runs an async main()
+lynx trace <records.jsonl>       # reconstruct a journaled run
 lynx policy lint                 # validates a YAML
 lynx policy bundle-id            # content-addressed ID
 ```
@@ -430,7 +495,7 @@ v1's `Runtime`, `runtime.run/resume/approve/deny`, SQLite store, audit chain, an
 | v1 | v2 |
 |----|-----|
 | `runtime.run(agent, task=...)` | `run_agent(agent, task, tools=..., policy=..., sinks=..., on_approval=...)` |
-| `runtime.resume(run_id)` | Doesn't exist — restart is restart. Pause in your handler instead. |
+| `runtime.resume(run_id)` | Re-call `run_agent` with the same `store=` + `run_id=` — completed steps replay from your journal |
 | `runtime.approve(approval_id)` | Doesn't exist — handler returns `ApprovalDecision` synchronously |
 | `runtime.audit_chain(run_id)` | Doesn't exist — wire `jsonl_sink` or your own sink |
 | `get_registry()` | Doesn't exist — `ToolSet.from_functions(*decorated_fns)` |
@@ -454,7 +519,7 @@ v1 will keep getting security fixes per the SECURITY.md policy.
 - [`docs/v2-rfc.md`](docs/v2-rfc.md) — the formal RFC this implementation follows
 - [`docs/concepts.md`](docs/concepts.md) — vocabulary
 - [`docs/cookbook.md`](docs/cookbook.md) — policy patterns (YAML)
-- [`docs/integration-cookbook.md`](docs/integration-cookbook.md) — wiring patterns for sinks (SQLite / Postgres / Splunk / OTel / HTTP) + approval handlers (Slack / email / webhook) + durability (Temporal)
+- [`docs/integration-cookbook.md`](docs/integration-cookbook.md) — wiring patterns for sinks (SQLite / Postgres / Splunk / OTel / HTTP) + approval handlers (Slack / email / webhook) + durability `RunStore` backends (Redis / Postgres / files / Temporal)
 - [`docs/faq.md`](docs/faq.md) — common questions
 
 ## License

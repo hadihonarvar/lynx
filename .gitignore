@@ -45,3 +45,7 @@ dist/
 # Never gets committed; see internal/README.md for what lives there.
 /internal/
 
+# Demo / promo material — animation scripts, rendered videos, screen
+# recordings. Local-only. See demo/README.md.
+/demo/
+

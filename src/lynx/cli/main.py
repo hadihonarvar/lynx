@@ -1,4 +1,4 @@
-"""Lynx CLI v2 — minimal: init, run, policy lint, policy bundle-id, --version."""
+"""Lynx CLI v2 — minimal: init, run, trace, policy lint, policy bundle-id, --version."""
 
 from __future__ import annotations
 
@@ -109,6 +109,86 @@ def run(script: str) -> None:
                 sys.path.remove(script_dir)
             except ValueError:
                 pass
+
+
+@cli.command()
+@click.argument("records_file", type=click.Path(exists=True))
+@click.option("--run-id", default=None, help="Only show records for this run id")
+def trace(records_file: str, run_id: str | None) -> None:
+    """Reconstruct a journaled run from a JSON-lines records file.
+
+    Reads one StepRecord per line (the ``step_record_to_json`` format used
+    by file-backed RunStore implementations — see the cookbook) and prints
+    what happened at every step: tool, verdict, outcome, and any uncertain
+    (intent-without-result) actions.
+    """
+    import json
+
+    from lynx.durability import replay, step_record_from_json
+
+    records = []
+    run_ids_seen: set[str] = set()
+    with open(records_file, encoding="utf-8") as handle:
+        for lineno, line in enumerate(handle, start=1):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                obj = json.loads(line)
+            except ValueError as exc:
+                click.echo(f"line {lineno}: not JSON: {exc}", err=True)
+                sys.exit(1)
+            if "run_id" not in obj:
+                if "correlation_id" in obj:
+                    click.echo(
+                        f"line {lineno}: this looks like an audit-sink file "
+                        "(jsonl_sink output), not a RunStore journal — trace "
+                        "reads StepRecords (step_record_to_json format)",
+                        err=True,
+                    )
+                else:
+                    click.echo(f"line {lineno}: not a StepRecord (no run_id)", err=True)
+                sys.exit(1)
+            run_ids_seen.add(obj["run_id"])
+            if run_id is not None and obj["run_id"] != run_id:
+                continue  # skip cheaply before building the full record
+            try:
+                records.append(step_record_from_json(line))
+            except Exception as exc:
+                click.echo(f"line {lineno}: unparseable record: {exc}", err=True)
+                sys.exit(1)
+    if not records:
+        click.echo("no records found", err=True)
+        sys.exit(1)
+    if run_id is None and len(run_ids_seen) > 1:
+        # replay() keys steps by step number — mixing runs would produce a
+        # plausible-looking but wrong reconstruction.
+        listing = ", ".join(sorted(run_ids_seen))
+        click.echo(
+            f"file contains {len(run_ids_seen)} runs ({listing}) — pick one with --run-id", err=True
+        )
+        sys.exit(1)
+
+    view = replay(records)
+    click.echo(f"run {view.run_id}: {view.records} records, {view.attempts} attempt(s)")
+    for s in view.steps:
+        if s.tool is None:
+            click.echo(f"  step {s.step}: final answer: {s.message}")
+            continue
+        status = "?" if s.ok is None else ("ok" if s.ok else "failed")
+        flag = ""
+        if s.uncertain:
+            flag = "  [UNCERTAIN: intent without result — action may have executed]"
+        elif s.resolved_uncertain:
+            flag = "  [resolved uncertain retry — the original attempt may still have executed]"
+        verdict = s.verdict or "-"
+        click.echo(f"  step {s.step}: {s.tool} verdict={verdict} {status}{flag}")
+        if s.message:
+            click.echo(f"           {s.message[:100]}")
+    if view.final_answer is not None:
+        click.echo(f"final: {view.final_answer}")
+    else:
+        click.echo("final: (run incomplete)")
 
 
 @cli.group()

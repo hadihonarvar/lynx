@@ -212,3 +212,27 @@ rules:
   decision: deny
   reason: "net-egress tools must have a shadow"
 ```
+
+## Gate uncertain retries (durable runs)
+
+When a durable run crashes between executing an action and journaling its
+result, the resume re-proposes that action with
+`context.extra.uncertain_retry: true` — it *may* have already executed.
+Decide per risk tier: idempotent tools re-run, money movement goes to a
+human.
+
+```yaml
+rules:
+  - id: never-rerun-uncertain-irreversibles
+    match:
+      context.extra.uncertain_retry: true
+      declared.reversible: false
+    decision: approve_required
+    reason: "action may have already executed in a crashed attempt"
+
+  - id: idempotent-retries-are-fine
+    match:
+      context.extra.uncertain_retry: true
+      declared.reversible: true
+    decision: allow
+```
