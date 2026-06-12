@@ -32,6 +32,7 @@ __all__ = [
     "ToolDef",
     "ToolMetadata",
     "ToolSet",
+    "Usage",
     "Verdict",
     "canonical_json",
     "new_correlation_id",
@@ -79,16 +80,47 @@ class Principal:
 
 
 @dataclass(frozen=True, slots=True)
-class Budget:
-    """Hard caps enforced by the scheduler.
+class Usage:
+    """Token counts for one model step, as reported by the provider.
 
-    Only ``steps`` and ``duration_seconds`` are enforced by the kernel; both are
-    checked between steps. ``duration_seconds`` uses a monotonic clock so wall-clock
-    jumps do not exhaust it.
+    Adapters populate this from the API response and attach it to the
+    ``ToolCall`` / ``FinalAnswer`` they return; the scheduler accumulates it,
+    emits ``step.usage`` events, and enforces ``Budget`` token caps. All
+    fields optional — an agent that reports nothing is simply unmetered.
+    Field names align with the OpenTelemetry GenAI conventions
+    (``gen_ai.usage.input_tokens`` / ``gen_ai.usage.output_tokens``).
+
+    The kernel never converts tokens to money — multiply these counts by
+    your own rates in a sink.
+    """
+
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    cache_read_tokens: int | None = None
+    cache_write_tokens: int | None = None
+    model: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class Budget:
+    """Hard caps enforced by the scheduler, all checked between steps.
+
+    ``duration_seconds`` uses a monotonic clock so wall-clock jumps do not
+    exhaust it; a single hung tool call is not interrupted (use a tool-level
+    timeout for that).
+
+    Token caps (``input_tokens`` / ``output_tokens`` / ``tokens`` = combined)
+    are enforced against adapter-reported ``Usage`` counts. Like every
+    in-loop limiter, they stop the *next* model call — the step that crossed
+    the cap has already happened. Agents that report no usage are not
+    metered; the caps simply never trigger.
     """
 
     duration_seconds: int | None = None
     steps: int | None = 50
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    tokens: int | None = None  # combined input + output
 
 
 @dataclass(frozen=True, slots=True)
@@ -214,11 +246,13 @@ class ToolCall:
     tool: str
     args: Mapping[str, Any]
     call_id: str = ""
+    usage: Usage | None = None  # set by adapters from the provider response
 
 
 @dataclass(frozen=True, slots=True)
 class FinalAnswer:
     text: str
+    usage: Usage | None = None  # set by adapters from the provider response
 
 
 # ---------------------------------------------------------------------------
@@ -298,6 +332,9 @@ class RunResult:
     final_answer: str | None = None
     error: str | None = None
     steps_taken: int = 0
+    # Lifetime token totals (includes journal-replayed steps on resume).
+    # None when the agent reported no usage at all.
+    usage: Usage | None = None
 
 
 # ---------------------------------------------------------------------------

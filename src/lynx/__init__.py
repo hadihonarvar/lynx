@@ -29,6 +29,7 @@ from lynx.core.types import (
     ToolDef,
     ToolMetadata,
     ToolSet,
+    Usage,
     Verdict,
 )
 from lynx.decorators import shadow, tool
@@ -92,6 +93,7 @@ __all__ = [
     "ToolDef",
     "ToolMetadata",
     "ToolSet",
+    "Usage",
     "Verdict",
     "__version__",
     "allow",

@@ -27,6 +27,7 @@ from lynx.core.types import (
     RunResult,
     ToolCall,
     ToolSet,
+    Usage,
     new_correlation_id,
     now_utc,
 )
@@ -193,6 +194,34 @@ async def run_agent(
                     )
         return event.seq
 
+    # ---- token meter: lifetime totals from adapter-reported Usage.
+    # Replayed steps count too (they were real spend in a prior attempt).
+    used_input = 0
+    used_output = 0
+    used_cache_read = 0
+    used_cache_write = 0
+    any_usage = False
+
+    def record_usage(u: Usage | None) -> None:
+        nonlocal used_input, used_output, used_cache_read, used_cache_write, any_usage
+        if u is None:
+            return
+        any_usage = True
+        used_input += u.input_tokens or 0
+        used_output += u.output_tokens or 0
+        used_cache_read += u.cache_read_tokens or 0
+        used_cache_write += u.cache_write_tokens or 0
+
+    def usage_totals() -> Usage | None:
+        if not any_usage:
+            return None
+        return Usage(
+            input_tokens=used_input,
+            output_tokens=used_output,
+            cache_read_tokens=used_cache_read,
+            cache_write_tokens=used_cache_write,
+        )
+
     idx = _EMPTY_INDEX
     journal_seq = 0
 
@@ -251,12 +280,15 @@ async def run_agent(
         # ---- a completed run resumes to the same answer, idempotently
         if idx.final_body is not None:
             answer = idx.final_body.get("final_answer")
+            for body in idx.proposals.values():  # lifetime totals from the journal
+                record_usage(action_from_body(body).usage)
             await emit("run.succeeded", {"final_answer": answer, "replayed": True})
             return RunResult(
                 correlation_id=cid,
                 bundle_id=policy.id,
                 final_answer=answer,
                 steps_taken=int(idx.final_body.get("step", 0)),
+                usage=usage_totals(),
             )
 
         # ---- claim the journal before any model call, so two simultaneous
@@ -279,6 +311,7 @@ async def run_agent(
                     bundle_id=policy.id,
                     error=f"step budget exhausted ({budget.steps})",
                     steps_taken=step_seq,
+                    usage=usage_totals(),
                 )
             if (
                 budget.duration_seconds is not None
@@ -290,6 +323,23 @@ async def run_agent(
                     bundle_id=policy.id,
                     error=f"duration budget exhausted ({budget.duration_seconds}s)",
                     steps_taken=step_seq,
+                    usage=usage_totals(),
+                )
+            token_overage: str | None = None
+            if budget.input_tokens is not None and used_input >= budget.input_tokens:
+                token_overage = f"input token budget exhausted ({budget.input_tokens})"
+            elif budget.output_tokens is not None and used_output >= budget.output_tokens:
+                token_overage = f"output token budget exhausted ({budget.output_tokens})"
+            elif budget.tokens is not None and used_input + used_output >= budget.tokens:
+                token_overage = f"token budget exhausted ({budget.tokens})"
+            if token_overage is not None:
+                await emit("run.failed", {"reason": token_overage})
+                return RunResult(
+                    correlation_id=cid,
+                    bundle_id=policy.id,
+                    error=token_overage,
+                    steps_taken=step_seq,
+                    usage=usage_totals(),
                 )
 
             # ---- next action: replay the journal if it has this step,
@@ -297,6 +347,10 @@ async def run_agent(
             replayed_proposal = idx.proposals.get(step_seq)
             if replayed_proposal is not None:
                 action = action_from_body(replayed_proposal)
+                # Replayed usage counts toward totals and budgets (it was real
+                # spend in a prior attempt) but step.usage is NOT re-emitted —
+                # the attempt that paid for it already announced it.
+                record_usage(action.usage)
             else:
                 try:
                     action = await agent.step(conversation)
@@ -307,21 +361,46 @@ async def run_agent(
                         bundle_id=policy.id,
                         error=f"agent.step raised: {type(exc).__name__}: {exc}",
                         steps_taken=step_seq,
+                        usage=usage_totals(),
                     )
                 if store is not None:
                     await journal("model.output", action_to_body(action, step_seq))
+                if action.usage is not None:
+                    record_usage(action.usage)
+                    u = action.usage
+                    await emit(
+                        "step.usage",
+                        {
+                            "seq": step_seq,
+                            "model": u.model,
+                            "input_tokens": u.input_tokens,
+                            "output_tokens": u.output_tokens,
+                            "cache_read_tokens": u.cache_read_tokens,
+                            "cache_write_tokens": u.cache_write_tokens,
+                            "total_input": used_input,
+                            "total_output": used_output,
+                        },
+                    )
 
             if isinstance(action, FinalAnswer):
                 # Journal the final answer BEFORE announcing success, so a
                 # crash in between resumes to "already final", not a re-run.
                 if store is not None:
                     await journal("final", {"step": step_seq, "final_answer": action.text})
-                await emit("run.succeeded", {"final_answer": action.text})
+                success_body: dict[str, Any] = {"final_answer": action.text}
+                totals = usage_totals()
+                if totals is not None:
+                    success_body["usage"] = {
+                        "input_tokens": totals.input_tokens,
+                        "output_tokens": totals.output_tokens,
+                    }
+                await emit("run.succeeded", success_body)
                 return RunResult(
                     correlation_id=cid,
                     bundle_id=policy.id,
                     final_answer=action.text,
                     steps_taken=step_seq,
+                    usage=totals,
                 )
 
             assert isinstance(action, ToolCall)
@@ -541,6 +620,7 @@ async def run_agent(
             bundle_id=policy.id,
             error=f"superseded: another worker is executing run {run_id!r}",
             steps_taken=step_seq,
+            usage=usage_totals(),
         )
     except _StoreFailed as exc:
         if not started_emitted:
@@ -551,4 +631,5 @@ async def run_agent(
             bundle_id=policy.id,
             error=str(exc),
             steps_taken=step_seq,
+            usage=usage_totals(),
         )

@@ -5,7 +5,13 @@ All notable changes to Lynx will be documented here. Format follows [Keep a Chan
 ## [Unreleased]
 
 ### Added
-- (nothing yet)
+- **Token metering and budgets** — adapters (`ClaudeAgent`, `OpenAIAgent`) now attach a `Usage` record (input/output/cache token counts + model, OTel GenAI-aligned field names) to every step; the scheduler emits `step.usage` events with per-step counts and running totals, reports lifetime totals on `RunResult.usage` and in the `run.succeeded` body, and enforces new `Budget` caps: `input_tokens`, `output_tokens`, `tokens` (combined) — checked between steps exactly like `steps`. The kernel counts and enforces counts; it never converts tokens to money — multiply by your own rates in a sink (no price tables shipped, ever).
+- `Usage` exported from `lynx`; `ToolCall` / `FinalAnswer` gain an optional `usage` field (non-breaking).
+- Durability interplay: usage rides in journaled `model.output` records — resumed runs report accurate lifetime totals, replayed spend counts toward token budgets, and `step.usage` is not re-emitted for replayed steps.
+- Example 25 (`25_token_budget.py`): metering, a cost sink with user-supplied rates, and a token cap stopping a runaway loop.
+
+### Changed
+- `Budget.tokens` returns (it was removed in v2.0 as unenforced) — this time enforced against adapter-reported counts. `Budget.usd` stays gone permanently.
 
 ## [2.2.0] — 2026-06-11
 

@@ -155,6 +155,7 @@ No hash chain. No content addressing. Your sink decides retention.
 | `run.resumed` | A journaled run was picked up again (store + same run_id) |
 | `run.superseded` | This worker lost the journal race to another worker and exited without executing anything |
 | `run.bundle_changed` | A resume is running under a different policy bundle than the journal was written with — warn-and-continue |
+| `step.usage` | The agent reported token counts for a live step — body has per-step counts, model, and running totals. Not re-emitted for journal-replayed steps (the paying attempt already announced them) |
 | `step.replayed` | A completed step was fed back from the journal — no policy re-evaluation, no execution |
 | `action.uncertain` | An intent was journaled without a result in a prior attempt — the action *may* have executed; policy sees `context.extra.uncertain_retry: true` |
 
@@ -170,16 +171,35 @@ Principal(kind="user" | "service" | "agent", id="...", name="...")
 
 ## Budget
 
-Frozen. Hard caps the kernel enforces between steps. Both fields are optional except `steps`, which defaults to 50:
+Frozen. Hard caps the kernel enforces between steps. All fields optional except `steps`, which defaults to 50:
 
 ```python
 @dataclass(frozen=True, slots=True)
 class Budget:
     duration_seconds: int | None = None
     steps: int | None = 50
+    input_tokens: int | None = None    # enforced against adapter-reported Usage
+    output_tokens: int | None = None
+    tokens: int | None = None          # combined input + output
 ```
 
-The scheduler uses a monotonic clock for `duration_seconds`, so wall-clock NTP jumps cannot exhaust (or extend) the budget. Checks happen between steps; a single hung tool call is not interrupted by `duration_seconds` — use a tool-level timeout for that.
+The scheduler uses a monotonic clock for `duration_seconds`, so wall-clock NTP jumps cannot exhaust (or extend) the budget. Checks happen between steps; a single hung tool call is not interrupted by `duration_seconds` — use a tool-level timeout for that. Token caps stop the *next* model call — the step that crossed the cap already happened — and never trigger for agents that report no usage.
+
+## Usage
+
+Frozen. Per-step token counts, reported by adapters from the provider response and attached to the `ToolCall` / `FinalAnswer` they return:
+
+```python
+@dataclass(frozen=True, slots=True)
+class Usage:
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    cache_read_tokens: int | None = None
+    cache_write_tokens: int | None = None
+    model: str | None = None    # per-step, so multi-model runs price correctly
+```
+
+The scheduler accumulates these into `RunResult.usage` (lifetime totals — replayed steps included), emits a `step.usage` event per live metered step, and enforces `Budget` token caps. Field names align with OpenTelemetry GenAI conventions (`gen_ai.usage.input_tokens` / `output_tokens`). The kernel never converts tokens to money — that's your sink, your rates.
 
 `run_agent`'s default for its `budget=` parameter is `Budget(steps=50, duration_seconds=600)` — a 50-step / 10-minute cap. Override per call to widen or tighten.
 

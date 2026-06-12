@@ -145,7 +145,9 @@ def test_double_tool_decoration_raises() -> None:
 
 
 def test_budget_no_legacy_fields() -> None:
-    """v2 removed Budget.usd and Budget.tokens (neither was enforced)."""
+    """v2 removed Budget.usd (money never enters the kernel). Budget.tokens
+    returned in v2.3 — but enforced this time, against adapter-reported
+    Usage counts, alongside input_tokens / output_tokens."""
     b = Budget()
     assert not hasattr(b, "usd")
-    assert not hasattr(b, "tokens")
+    assert b.tokens is None and b.input_tokens is None and b.output_tokens is None

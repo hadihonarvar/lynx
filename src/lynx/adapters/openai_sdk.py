@@ -24,9 +24,23 @@ import json
 from typing import Any
 
 from lynx.adapters._schema import toolset_to_openai_tools
-from lynx.core.types import FinalAnswer, Message, ToolCall, ToolSet
+from lynx.core.types import FinalAnswer, Message, ToolCall, ToolSet, Usage
 
 __all__ = ["OpenAIAgent"]
+
+
+def _usage_from_response(response: Any, model: str) -> Usage | None:
+    """Map an OpenAI Chat Completions usage block to a Lynx Usage record."""
+    raw = getattr(response, "usage", None)
+    if raw is None:
+        return None
+    details = getattr(raw, "prompt_tokens_details", None)
+    return Usage(
+        input_tokens=getattr(raw, "prompt_tokens", None),
+        output_tokens=getattr(raw, "completion_tokens", None),
+        cache_read_tokens=getattr(details, "cached_tokens", None) if details else None,
+        model=model,
+    )
 
 
 class OpenAIAgent:
@@ -94,8 +108,9 @@ class OpenAIAgent:
             kwargs["tools"] = self._tool_defs
 
         response = await self._client.chat.completions.create(**kwargs)
+        usage = _usage_from_response(response, self._model)
         if not response.choices:
-            return FinalAnswer(text="(no choices returned)")
+            return FinalAnswer(text="(no choices returned)", usage=usage)
         choice = response.choices[0].message
 
         if getattr(choice, "tool_calls", None):
@@ -112,8 +127,8 @@ class OpenAIAgent:
                 # Don't silently drop the malformed string — surface it so
                 # audit/debugging shows what the model actually sent.
                 args = {"_raw_arguments": raw}
-            return ToolCall(tool=call.function.name, args=args, call_id=call.id)
-        return FinalAnswer(text=choice.content or "(no response)")
+            return ToolCall(tool=call.function.name, args=args, call_id=call.id, usage=usage)
+        return FinalAnswer(text=choice.content or "(no response)", usage=usage)
 
 
 def _to_openai_messages(conversation: tuple[Message, ...], system: str) -> list[dict[str, Any]]:

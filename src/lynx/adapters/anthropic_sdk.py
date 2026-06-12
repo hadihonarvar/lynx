@@ -29,7 +29,22 @@ from __future__ import annotations
 from typing import Any
 
 from lynx.adapters._schema import toolset_to_anthropic_tools
-from lynx.core.types import FinalAnswer, Message, ToolCall, ToolSet
+from lynx.core.types import FinalAnswer, Message, ToolCall, ToolSet, Usage
+
+
+def _usage_from_response(response: Any, model: str) -> Usage | None:
+    """Map an Anthropic Messages API usage block to a Lynx Usage record."""
+    raw = getattr(response, "usage", None)
+    if raw is None:
+        return None
+    return Usage(
+        input_tokens=getattr(raw, "input_tokens", None),
+        output_tokens=getattr(raw, "output_tokens", None),
+        cache_read_tokens=getattr(raw, "cache_read_input_tokens", None),
+        cache_write_tokens=getattr(raw, "cache_creation_input_tokens", None),
+        model=model,
+    )
+
 
 __all__ = ["ClaudeAgent"]
 
@@ -119,6 +134,7 @@ class ClaudeAgent:
             kwargs["tools"] = self._tool_defs
 
         response = await self._client.messages.create(**kwargs)
+        usage = _usage_from_response(response, self._model)
 
         text_parts: list[str] = []
         tool_use_blocks: list[Any] = []
@@ -139,8 +155,9 @@ class ClaudeAgent:
                 tool=chosen.name,
                 args=dict(input_data),
                 call_id=chosen.id,
+                usage=usage,
             )
-        return FinalAnswer(text="\n".join(text_parts).strip() or "(no response)")
+        return FinalAnswer(text="\n".join(text_parts).strip() or "(no response)", usage=usage)
 
 
 def _to_anthropic_messages(conversation: tuple[Message, ...]) -> list[dict[str, Any]]:

@@ -43,7 +43,7 @@ from datetime import datetime
 from types import MappingProxyType
 from typing import Any, Protocol, runtime_checkable
 
-from lynx.core.types import FinalAnswer, ToolCall, canonical_json
+from lynx.core.types import FinalAnswer, ToolCall, Usage, canonical_json
 
 __all__ = [
     "DuplicateRecord",
@@ -146,25 +146,56 @@ def idempotency_key(run_id: str, step: int, tool: str, args: Mapping[str, Any]) 
 # ---------------------------------------------------------------------------
 
 
-def action_to_body(action: ToolCall | FinalAnswer, step: int) -> dict[str, Any]:
-    if isinstance(action, FinalAnswer):
-        return {"step": step, "type": "final_answer", "text": action.text}
+def _usage_to_body(usage: Usage | None) -> dict[str, Any] | None:
+    if usage is None:
+        return None
     return {
-        "step": step,
-        "type": "tool_call",
-        "tool": action.tool,
-        "args": dict(action.args),
-        "call_id": action.call_id,
+        "input_tokens": usage.input_tokens,
+        "output_tokens": usage.output_tokens,
+        "cache_read_tokens": usage.cache_read_tokens,
+        "cache_write_tokens": usage.cache_write_tokens,
+        "model": usage.model,
     }
 
 
+def _usage_from_body(raw: Mapping[str, Any] | None) -> Usage | None:
+    if not raw:
+        return None
+    return Usage(
+        input_tokens=raw.get("input_tokens"),
+        output_tokens=raw.get("output_tokens"),
+        cache_read_tokens=raw.get("cache_read_tokens"),
+        cache_write_tokens=raw.get("cache_write_tokens"),
+        model=raw.get("model"),
+    )
+
+
+def action_to_body(action: ToolCall | FinalAnswer, step: int) -> dict[str, Any]:
+    usage = _usage_to_body(action.usage)
+    if isinstance(action, FinalAnswer):
+        body: dict[str, Any] = {"step": step, "type": "final_answer", "text": action.text}
+    else:
+        body = {
+            "step": step,
+            "type": "tool_call",
+            "tool": action.tool,
+            "args": dict(action.args),
+            "call_id": action.call_id,
+        }
+    if usage is not None:
+        body["usage"] = usage
+    return body
+
+
 def action_from_body(body: Mapping[str, Any]) -> ToolCall | FinalAnswer:
+    usage = _usage_from_body(body.get("usage"))
     if body.get("type") == "final_answer":
-        return FinalAnswer(text=body["text"])
+        return FinalAnswer(text=body["text"], usage=usage)
     return ToolCall(
         tool=body["tool"],
         args=dict(body.get("args", {})),
         call_id=body.get("call_id", ""),
+        usage=usage,
     )
 
 

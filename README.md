@@ -52,6 +52,7 @@ result = await run_agent(
 - **No globals.** No tool registry, no broker, no module-level state. ToolSet is built explicitly at call site.
 - **Hot-swappable policy.** Pass a different `PolicyBundle` on the next `run_agent` call — the bundle is an immutable value; the kernel holds nothing between calls. (Mid-run reload is not supported; build a new bundle and use it on the next run.)
 - **Durable runs, no double side effects** *(opt-in)*. Pass a `RunStore` you implement over your own storage and a stable `run_id`: a crashed run resumes at the first incomplete step — the model is not re-called for completed steps (no re-burned tokens) and journaled actions are not re-executed (no double charges). Two racing workers resolve to one winner; the loser exits `superseded` before executing anything.
+- **Token metering and caps.** Adapters report per-step input/output token counts; the kernel streams them as `step.usage` events, totals them on `RunResult.usage`, and enforces `Budget(tokens=…, input_tokens=…, output_tokens=…)` between steps. The kernel counts and enforces counts — it never converts tokens to money; multiply by your own rates in a sink.
 
 ## What v2 does NOT do
 
@@ -449,6 +450,39 @@ to a human:
 
 Inspect any journal with `replay(records)` (pure function) or `lynx trace
 records.jsonl` (for file-backed stores).
+
+## Token usage & budgets
+
+Adapters (`ClaudeAgent`, `OpenAIAgent`) attach a `Usage` record to every model
+step — input/output/cache token counts plus the model name. The kernel then:
+
+```python
+result = await run_agent(
+    agent, task, tools=tools, policy=policy,
+    budget=Budget(
+        steps=50,
+        duration_seconds=600,
+        input_tokens=500_000,     # separate caps — input and output
+        output_tokens=100_000,    # are priced differently
+        tokens=550_000,           # or one combined cap
+    ),
+    sinks=(my_cost_sink,),        # step.usage events stream here
+)
+result.usage   # Usage(input_tokens=..., output_tokens=...) — lifetime totals
+```
+
+- **`step.usage` events** carry per-step counts + running totals — your sink
+  multiplies by *your* rates for dollars, alerts, and attribution
+  (per-customer = group by `correlation_id`). Lynx ships no price tables;
+  they go stale weekly and your negotiated rates aren't list rates.
+- **Caps are enforced between steps**, exactly like `steps` — when crossed,
+  the run stops with `error="output token budget exhausted (…)"`. Honest
+  caveat: like every in-loop limiter, a cap stops the *next* model call; the
+  step that crossed the line already happened.
+- **Unmetered agents are unmetered.** A hand-rolled `Agent` that attaches no
+  `usage` produces no events and no enforcement — Lynx enforces what it can
+  see and nothing else. With durability, journal-replayed steps count toward
+  totals and caps (they were real spend in a prior attempt).
 
 Scope, honestly: Lynx does not restart dead processes (your supervisor does);
 durability needs no database, but *distributed* durability — runs surviving
