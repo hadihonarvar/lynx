@@ -1,4 +1,4 @@
-"""CrewAI adapter — v2.
+"""CrewAI adapter.
 
 Wraps a CrewAI ``Crew`` as a Lynx ``Agent``. CrewAI orchestrates internally
 via ``kickoff()``; this adapter runs it once and surfaces the result.

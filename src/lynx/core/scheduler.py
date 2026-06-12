@@ -1,4 +1,4 @@
-"""Scheduler — v2.
+"""Scheduler.
 
 A single pure-ish async function: ``run_agent``. No classes. No globals.
 The agent step loop with policy enforcement, streaming audit events, and

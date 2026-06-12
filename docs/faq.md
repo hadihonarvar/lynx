@@ -6,7 +6,7 @@ The PDP is a pure function; typical evaluation is ~1µs. Per step, the kernel ad
 
 ### Where does the audit go?
 
-Wherever you point the sinks. v2 holds nothing. Common choices:
+Wherever you point the sinks. Lynx holds nothing. Common choices:
 - `stdout_sink()` — dev
 - `jsonl_sink(open("audit.jsonl", "a"))` — to disk; you own retention
 - Custom `callback_sink(fn)` — ship to OTel, Datadog, Splunk, your bus
@@ -15,7 +15,7 @@ See the [integration cookbook](integration-cookbook.md) for ready-to-paste recip
 
 ### Can I get the v1 hash-chained audit chain?
 
-Not in v2. If you need it: `pip install "lynx-agent<2.0"`. We keep v1.0.x security-patched.
+Not in current Lynx. If you need it: `pip install "lynx-agent<2.0"`. We keep v1.0.x security-patched.
 
 ### How do I do cross-process approval (Slack, web UI)?
 

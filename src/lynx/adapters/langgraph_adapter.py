@@ -1,4 +1,4 @@
-"""LangGraph adapter — v2.
+"""LangGraph adapter.
 
 Wraps a compiled LangGraph state graph as an Lynx ``Agent``. The graph's
 ``ToolNode`` calls surface to Lynx as ``ToolCall``s; the kernel mediates

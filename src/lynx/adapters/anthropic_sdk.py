@@ -1,4 +1,4 @@
-"""Anthropic Claude adapter — v2.
+"""Anthropic Claude adapter.
 
 Wraps the Anthropic Messages API into the Lynx ``Agent`` protocol. The
 adapter takes a ``ToolSet`` at construction (no global registry); the

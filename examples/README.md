@@ -120,9 +120,9 @@ python examples/22_crewai_demo.py
 
 ## After running anything
 
-In v2 the audit goes to **your sinks**, not to a Lynx-managed database. Inspect the events as they happen via `stdout_sink()`, or stream them to a file via `jsonl_sink(...)` (see example 06).
+In Lynx the audit goes to **your sinks**, not to a Lynx-managed database. Inspect the events as they happen via `stdout_sink()`, or stream them to a file via `jsonl_sink(...)` (see example 06).
 
-There is no `lynx ps` / `lynx trace` / `lynx audit` — v2 holds no past runs.
+There is no `lynx ps` / `lynx audit` — Lynx itself holds no past runs. (`lynx trace <records.jsonl>` exists, but it reads a journal file *you* kept via a RunStore — see example 24.)
 
 ## What each example demonstrates
 

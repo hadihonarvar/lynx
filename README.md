@@ -43,7 +43,7 @@ result = await run_agent(
 # Lynx holds NOTHING. No DB. No state. No leaks.
 ```
 
-## What v2 does
+## What Lynx does
 
 - **Policy-gated execution** at the tool-call boundary. Five verdicts: `allow / deny / dry_run / approve_required / transform`.
 - **Streaming events** to your sinks. We never store events — your sink can buffer, write to disk, ship to OTel, post to a webhook, whatever you choose.
@@ -56,7 +56,7 @@ result = await run_agent(
 - **Pluggable execution (the executor seam).** Every approved action flows through one `Executor` — in-process by default, a subprocess with rlimits, or *your* Docker/gVisor/E2B wrapper (one async callable). Route per-tool via `@tool(isolation="container")` + `route_executor({...})`, failing closed when a requested isolation has no route. Lynx defines the seam; the security boundary is whatever you plug in.
 - **Handoff graphs** *(optional)*. Sequential multi-agent workflows where **the edge is a permission boundary**: each node is one `run_agent` call with its own policy/tools/budget, and edges route on outcomes — including **denial counts**. Bounded by construction (`max_transitions`), explicit context passing, YAML-declarable, durable via the same `RunStore`. Just sugar over a loop of `run_agent` calls — skip it and write the loop yourself anytime.
 
-## What v2 does NOT do
+## What Lynx does NOT do
 
 - **No storage** — durability journals to a `RunStore` *you* implement on *your* Redis/Postgres/Dynamo (the contract is two methods and one sentence); audit events stream to *your* sinks. Lynx never opens a file or a connection.
 - **No process supervision** — Lynx does not restart dead workers; your supervisor (systemd, k8s, a queue) does. Lynx makes the restart cheap and safe.
@@ -612,7 +612,7 @@ lynx policy bundle-id            # content-addressed ID
 
 v1's `Runtime`, `runtime.run/resume/approve/deny`, SQLite store, audit chain, and approval broker are all gone. Replace:
 
-| v1 | v2 |
+| v1.x | Lynx today |
 |----|-----|
 | `runtime.run(agent, task=...)` | `run_agent(agent, task, tools=..., policy=..., sinks=..., on_approval=...)` |
 | `runtime.resume(run_id)` | Re-call `run_agent` with the same `store=` + `run_id=` — completed steps replay from your journal |
@@ -636,7 +636,7 @@ v1 will keep getting security fixes per the SECURITY.md policy.
 
 ## Design
 
-- [`docs/v2-rfc.md`](docs/v2-rfc.md) — the formal RFC this implementation follows
+- [`docs/v2-rfc.md`](docs/v2-rfc.md) — the original v2-rewrite RFC (historical design record)
 - [`docs/concepts.md`](docs/concepts.md) — vocabulary
 - [`docs/cookbook.md`](docs/cookbook.md) — policy patterns (YAML)
 - [`docs/integration-cookbook.md`](docs/integration-cookbook.md) — wiring patterns for sinks (SQLite / Postgres / Splunk / OTel / HTTP) + approval handlers (Slack / email / webhook) + durability `RunStore` backends (Redis / Postgres / files / Temporal)

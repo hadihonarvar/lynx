@@ -1,4 +1,4 @@
-"""MCP (Model Context Protocol) adapter — v2.
+"""MCP (Model Context Protocol) adapter.
 
 Connects to an MCP server, discovers its tools, and returns them as a
 ``ToolSet`` you can pass directly to ``run_agent`` (or union with your own

@@ -1,6 +1,6 @@
 # Concepts
 
-Vocabulary for Lynx v2 in one page.
+Vocabulary for Lynx in one page.
 
 ---
 
@@ -63,7 +63,7 @@ The Policy Enforcement Point: `mediate(request, decision, tools, on_approval) ->
 
 ## Run
 
-Conceptually, one execution of `run_agent`. Not a stored entity — there is no `Run` class in v2. Each call generates a `correlation_id` (UUID4) that ties all its events together. (With a `RunStore`: a fresh run's `correlation_id` defaults to the `run_id`; any re-invocation gets `"<run_id>#<suffix>"` so `(correlation_id, seq)` never collides across attempts while staying groupable by prefix.)
+Conceptually, one execution of `run_agent`. Not a stored entity — there is no `Run` class in Lynx. Each call generates a `correlation_id` (UUID4) that ties all its events together. (With a `RunStore`: a fresh run's `correlation_id` defaults to the `run_id`; any re-invocation gets `"<run_id>#<suffix>"` so `(correlation_id, seq)` never collides across attempts while staying groupable by prefix.)
 
 ## RunStore / StepRecord (durability, opt-in)
 

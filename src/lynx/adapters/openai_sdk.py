@@ -1,4 +1,4 @@
-"""OpenAI GPT adapter — v2.
+"""OpenAI GPT adapter.
 
 Wraps the OpenAI Chat Completions API into the Lynx ``Agent`` protocol.
 The adapter takes a ``ToolSet`` at construction (no global registry).

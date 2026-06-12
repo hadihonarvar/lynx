@@ -1,4 +1,4 @@
-"""Agent protocol + message shapes (v2).
+"""Agent protocol + message shapes.
 
 The runtime accepts any object implementing the ``Agent`` protocol below.
 ``Message``, ``ToolCall``, ``FinalAnswer`` are re-exported from
