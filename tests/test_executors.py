@@ -253,3 +253,64 @@ async def test_isolation_hint_survives_shadow_decoration() -> None:
     meta = boxed.__lynx_meta__.metadata
     assert meta.isolation == "boxed"
     assert meta.has_shadow is True
+
+
+# --- timeouts ----------------------------------------------------------------
+
+
+@tool(reversible=True, scope=("compute:exec",))
+async def sleepy(seconds: float) -> str:
+    """Cooperatively sleeps — cancellable by inline_executor's timeout."""
+    import asyncio as _asyncio
+
+    await _asyncio.sleep(seconds)
+    return "woke up"
+
+
+async def test_agent_step_timeout_fails_run_cleanly() -> None:
+    from lynx import Budget
+
+    class HangingAgent:
+        async def step(self, conversation):
+            import asyncio as _asyncio
+
+            await _asyncio.sleep(30)
+
+    result = await run_agent(
+        HangingAgent(),
+        task="t",
+        tools=ToolSet.from_functions(plain),
+        policy=compile_policy(ALLOW_ALL),
+        budget=Budget(steps=5, step_timeout_seconds=0.05),
+    )
+    assert result.error == "agent.step timed out after 0.05s"
+    assert result.final_answer is None
+
+
+async def test_inline_executor_timeout_fails_action_not_run() -> None:
+    result = await run_agent(
+        Scripted(
+            ToolCall(tool="sleepy", args={"seconds": 30}, call_id="c"),
+            FinalAnswer(text="adapted"),
+        ),
+        task="t",
+        tools=ToolSet.from_functions(sleepy),
+        policy=compile_policy(ALLOW_ALL),
+        executor=inline_executor(timeout_seconds=0.05),
+    )
+    # The tool timed out, but the RUN survived — the agent saw the error.
+    assert result.final_answer == "adapted"
+
+
+async def test_inline_executor_no_timeout_unchanged() -> None:
+    result = await run_agent(
+        Scripted(
+            ToolCall(tool="sleepy", args={"seconds": 0.01}, call_id="c"),
+            FinalAnswer(text="d"),
+        ),
+        task="t",
+        tools=ToolSet.from_functions(sleepy),
+        policy=compile_policy(ALLOW_ALL),
+        executor=inline_executor(timeout_seconds=5),
+    )
+    assert result.final_answer == "d"

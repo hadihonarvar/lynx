@@ -203,9 +203,10 @@ class Budget:
     input_tokens: int | None = None    # enforced against adapter-reported Usage
     output_tokens: int | None = None
     tokens: int | None = None          # combined input + output
+    step_timeout_seconds: float | None = None   # per agent.step() model call
 ```
 
-The scheduler uses a monotonic clock for `duration_seconds`, so wall-clock NTP jumps cannot exhaust (or extend) the budget. Checks happen between steps; a single hung tool call is not interrupted by `duration_seconds` — use a tool-level timeout for that. Token caps stop the *next* model call — the step that crossed the cap already happened — and never trigger for agents that report no usage.
+The scheduler uses a monotonic clock for `duration_seconds`, so wall-clock NTP jumps cannot exhaust (or extend) the budget. Checks happen between steps; a single hung tool call is not interrupted by `duration_seconds` — bound tools at the executor seam (`inline_executor(timeout_seconds=…)` cancels cooperative tools; `subprocess_executor` kills even tight CPU loops). Token caps stop the *next* model call — the step that crossed the cap already happened — and never trigger for agents that report no usage. `step_timeout_seconds` is the exception to "between steps": it wraps each `agent.step()` call itself, so a hung provider connection fails the run (`error="agent.step timed out after Ns"`) instead of hanging it forever — and since nothing journals until the step returns, a timed-out step leaves no record and resume simply re-asks the model.
 
 ## Usage
 

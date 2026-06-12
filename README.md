@@ -547,9 +547,10 @@ result = await run_agent(
     budget=Budget(
         steps=50,
         duration_seconds=600,
-        input_tokens=500_000,     # separate caps — input and output
-        output_tokens=100_000,    # are priced differently
-        tokens=550_000,           # or one combined cap
+        input_tokens=500_000,       # separate caps — input and output
+        output_tokens=100_000,      # are priced differently
+        tokens=550_000,             # or one combined cap
+        step_timeout_seconds=120,   # a hung model call fails, never hangs
     ),
     sinks=(my_cost_sink,),        # step.usage events stream here
 )

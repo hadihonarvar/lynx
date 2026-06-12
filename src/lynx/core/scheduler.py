@@ -365,7 +365,26 @@ async def run_agent(
                 record_usage(action.usage)
             else:
                 try:
-                    action = await agent.step(conversation)
+                    if budget.step_timeout_seconds is not None:
+                        # A hung provider call fails the run instead of
+                        # hanging it forever. Cancellation propagates into
+                        # the adapter's HTTP client; nothing has been
+                        # journaled for this step, so resume re-asks cleanly.
+                        action = await asyncio.wait_for(
+                            agent.step(conversation), timeout=budget.step_timeout_seconds
+                        )
+                    else:
+                        action = await agent.step(conversation)
+                except TimeoutError:
+                    reason = f"agent.step timed out after {budget.step_timeout_seconds}s"
+                    await emit("run.failed", {"reason": reason})
+                    return RunResult(
+                        correlation_id=cid,
+                        bundle_id=policy.id,
+                        error=reason,
+                        steps_taken=step_seq,
+                        usage=usage_totals(),
+                    )
                 except Exception as exc:
                     await emit("run.failed", {"reason": f"agent.step raised: {exc!r}"})
                     return RunResult(

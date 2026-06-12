@@ -55,17 +55,37 @@ class Executor(Protocol):
     async def __call__(self, request: ActionRequest, tool: ToolDef) -> ActionResult: ...
 
 
-def inline_executor() -> Executor:
-    """Run the tool in-process, right here. The default — and exactly what
-    the kernel did before the executor seam existed."""
+def inline_executor(*, timeout_seconds: float | None = None) -> Executor:
+    """Run the tool in-process, right here. The default — and (with
+    ``timeout_seconds=None``) exactly what the kernel did before the
+    executor seam existed.
+
+    ``timeout_seconds`` bounds each tool call's wall clock: on expiry the
+    call is cancelled and the action fails with a structured timeout error —
+    the run continues and the agent sees ``[error] ...`` and can adapt.
+    Cancellation only interrupts cooperative (awaiting) tools; a tool stuck
+    in a tight CPU loop never yields and cannot be cancelled in-process —
+    use ``subprocess_executor`` for those.
+    """
 
     async def execute(request: ActionRequest, tool: ToolDef) -> ActionResult:
         started = time.perf_counter()
         try:
-            value = await tool.fn(**dict(request.args))
+            if timeout_seconds is not None:
+                value = await asyncio.wait_for(
+                    tool.fn(**dict(request.args)), timeout=timeout_seconds
+                )
+            else:
+                value = await tool.fn(**dict(request.args))
             return ActionResult(
                 ok=True,
                 value=value,
+                duration_ms=int((time.perf_counter() - started) * 1000),
+            )
+        except TimeoutError:
+            return ActionResult(
+                ok=False,
+                error=f"TimeoutError: tool {request.tool!r} timed out after {timeout_seconds}s",
                 duration_ms=int((time.perf_counter() - started) * 1000),
             )
         except asyncio.CancelledError:

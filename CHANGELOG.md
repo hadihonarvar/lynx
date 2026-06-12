@@ -4,6 +4,10 @@ All notable changes to Lynx will be documented here. Format follows [Keep a Chan
 
 ## [Unreleased]
 
+### Added (timeouts)
+- `Budget.step_timeout_seconds` — wraps each `agent.step()` model call in `asyncio.wait_for`, so a hung provider connection fails the run with `error="agent.step timed out after Ns"` instead of hanging forever. Durability-safe: nothing journals until the step returns, so a timed-out step leaves no record and resume re-asks the model cleanly.
+- `inline_executor(timeout_seconds=...)` — bounds each in-process tool call; on expiry the action fails with a structured timeout error and the run continues (the agent sees `[error] ...` and adapts). Cancels cooperative tools only — tight CPU loops need `subprocess_executor`, which kills the child.
+
 ### Fixed
 - `run_in_subprocess` (and therefore `subprocess_executor`) now works for tools defined in a script's `__main__`: the child loads the parent script under a private module name and aliases it as `__main__` before unpickling (the same mechanism `multiprocessing` uses; the script's `if __name__ == "__main__"` guard does not re-run). Previously every script-defined sandboxed tool failed with `sandbox exited 1`. Interactive-session functions now fail fast with a clear message.
 

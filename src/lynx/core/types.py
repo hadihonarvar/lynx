@@ -114,6 +114,12 @@ class Budget:
     in-loop limiter, they stop the *next* model call — the step that crossed
     the cap has already happened. Agents that report no usage are not
     metered; the caps simply never trigger.
+
+    ``step_timeout_seconds`` is the exception to "checked between steps": it
+    wraps each ``agent.step()`` call itself, so a hung provider connection
+    fails the run instead of hanging it forever. It does NOT cover tool
+    execution — bound tools at the executor seam
+    (``inline_executor(timeout_seconds=...)`` / ``subprocess_executor``).
     """
 
     duration_seconds: int | None = None
@@ -121,6 +127,7 @@ class Budget:
     input_tokens: int | None = None
     output_tokens: int | None = None
     tokens: int | None = None  # combined input + output
+    step_timeout_seconds: float | None = None  # per agent.step() model call
 
 
 @dataclass(frozen=True, slots=True)
