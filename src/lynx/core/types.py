@@ -1,4 +1,4 @@
-"""Core immutable types for Lynx v2.
+"""Core immutable types for Lynx.
 
 Every type here is ``frozen=True, slots=True``. No mutation. No globals.
 Pure values that flow through the kernel and out to sinks.

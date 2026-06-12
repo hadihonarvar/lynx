@@ -47,7 +47,7 @@ Out of scope:
 - Vulnerabilities in third-party tools you wrap with `@tool` (those are your dependency's problem)
 - Misconfigured policies that allow dangerous actions (this is the operator's responsibility)
 - Issues in the optional adapters (`lynx/adapters/*`) that depend on bugs in the wrapped SDK
-- Findings against EOL versions (v1.0.x receives security backports for the latest minor; v2 is the active branch)
+- Findings against EOL versions (v1.0.x receives security backports for the latest minor; 2.x is the active branch)
 
 ## Threat model
 
@@ -58,7 +58,7 @@ The kernel's trust boundaries:
 3. **Kernel → sink.** Sinks receive events and own retention. The kernel itself holds no state beyond a single `run_agent` call.
 4. **Kernel → approval handler.** The handler is called synchronously and is fully trusted. Cross-process / cross-host approval is the handler's design problem.
 
-What v2 does NOT defend against:
+What Lynx does NOT defend against:
 
 - A compromised tool function (you decide what tools are in the `ToolSet`).
 - A handler that lies about its decision (it's your code).

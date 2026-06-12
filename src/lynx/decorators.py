@@ -1,4 +1,4 @@
-"""@tool and .shadow decorators — v2.
+"""@tool and .shadow decorators.
 
 The decorator attaches a ``ToolDef`` to the function as ``__lynx_meta__``.
 No global registration. Users explicitly bundle decorated functions into a

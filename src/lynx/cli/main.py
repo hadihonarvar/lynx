@@ -1,4 +1,4 @@
-"""Lynx CLI v2 — minimal: init, run, trace, policy lint, policy bundle-id, --version."""
+"""Lynx CLI — minimal: init, run, trace, policy lint, policy bundle-id, --version."""
 
 from __future__ import annotations
 

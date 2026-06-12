@@ -264,7 +264,7 @@ Predicates are pure inlinable booleans. The compiler expands references at load 
 
 For predicates YAML can't easily express — path extraction, structural pattern matching, decimal math.
 
-**v2 difference:** Python rules are passed explicitly to `compile_policy()` — no module-level `@policy.rule` registration. This keeps the kernel stateless.
+**Unlike v1.x:** Python rules are passed explicitly to `compile_policy()` — no module-level `@policy.rule` registration. This keeps the kernel stateless.
 
 ```python
 # policy_rules.py

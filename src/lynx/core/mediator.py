@@ -1,4 +1,4 @@
-"""Action Mediator (PEP) — v2.
+"""Action Mediator (PEP).
 
 Pure async function. Takes a request, decision, the toolset, an approval
 handler, and (optionally) an executor. Returns an ``ActionResult``. No
