@@ -55,6 +55,7 @@ result = await run_agent(
 - **Token metering and caps.** Adapters report per-step input/output token counts; the kernel streams them as `step.usage` events, totals them on `RunResult.usage`, and enforces `Budget(tokens=…, input_tokens=…, output_tokens=…)` between steps. The kernel counts and enforces counts — it never converts tokens to money; multiply by your own rates in a sink.
 - **Pluggable execution (the executor seam).** Every approved action flows through one `Executor` — in-process by default, a subprocess with rlimits, or *your* Docker/gVisor/E2B wrapper (one async callable). Route per-tool via `@tool(isolation="container")` + `route_executor({...})`, failing closed when a requested isolation has no route. Lynx defines the seam; the security boundary is whatever you plug in.
 - **Handoff graphs** *(optional)*. Sequential multi-agent workflows where **the edge is a permission boundary**: each node is one `run_agent` call with its own policy/tools/budget, and edges route on outcomes — including **denial counts**. Bounded by construction (`max_transitions`), explicit context passing, YAML-declarable, durable via the same `RunStore`. Just sugar over a loop of `run_agent` calls — skip it and write the loop yourself anytime.
+- **Operability controls.** A kill-switch (`cancel=CancelToken()`) checked at every step boundary and before each tool runs — a cancelled run stops after at most one more action. Plus a repetition gate (`Budget(max_repeated_calls=)`) for same-tool-same-args loops, and per-step / per-tool timeouts.
 
 ## What Lynx does NOT do
 

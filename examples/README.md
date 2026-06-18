@@ -1,8 +1,8 @@
 # examples/
 
-A learning path of 30 examples. Each is **self-contained** and starts with a plain-language SCENARIO explaining the problem it solves.
+A learning path of 31 examples. Each is **self-contained** and starts with a plain-language SCENARIO explaining the problem it solves.
 
-Read 01–12 in order for the core narrative; 13–30 cover every remaining feature for full coverage.
+Read 01–12 in order for the core narrative; 13–31 cover every remaining feature for full coverage.
 
 ```
 SIMPLE          01 → 02 → 03         "see the system working"
@@ -10,14 +10,15 @@ MORE COMPLEX    04 → 05 → 06         "approvals, real LLMs, streaming audit"
 ADVANCED        07 → 08 → 09         "production patterns: rules, transforms, web service"
 COMPLETE        10                   "the full thing — one realistic DevOps scenario"
 INTEGRATIONS    11 (Flask) 12 (Django)   "drop Lynx into your existing web framework"
-FULL COVERAGE   13 → 30              "every feature: python rules, transform ops,
+FULL COVERAGE   13 → 31              "every feature: python rules, transform ops,
                                        custom sinks, cross-process approval,
                                        shadow helpers, sandbox, hot-swap,
                                        MCP, LangGraph, CrewAI, error model,
                                        durable crash-resume, token budgets,
                                        executor seam (BYO sandbox),
                                        handoff graphs, memory gating,
-                                       cost attribution, full-stack capstone"
+                                       cost attribution, full-stack capstone,
+                                       kill-switch + repetition gate"
 ```
 
 ## Features at a glance — with code
@@ -159,7 +160,7 @@ result = await run_graph(nodes, task, router=graph,        # 7: teamwork
 ```
 → example **28** (the full-stack capstone)
 
-## The 30 examples
+## The 31 examples
 
 | # | File | Verdict shown | Problem in one line |
 |---|------|--------------|---------------------|
@@ -193,6 +194,7 @@ result = await run_graph(nodes, task, router=graph,        # 7: teamwork
 | 28 | [`28_full_stack_pipeline.py`](28_full_stack_pipeline.py) | **all pillars composed** | "One refund pipeline: graph + policy + approval + executor routing + metering + durable replay — six features, one chokepoint." |
 | 29 | [`29_memory_gating.py`](29_memory_gating.py) | memory ops through policy | "Gate remember/recall/forget: poisoning denied, recalls tenant-scoped, deletions previewed + human-approved (OWASP ASI06)." |
 | 30 | [`30_cost_attribution.py`](30_cost_attribution.py) | FinOps attribution sink | "Per-customer × per-model chargeback from run.started + step.usage — your rates, your join, no proxy." |
+| 31 | [`31_kill_switch.py`](31_kill_switch.py) | `CancelToken` + `Budget(max_repeated_calls)` | "Stop a runaway mid-run after one more action; break a same-tool-same-args loop — clean structured stops, no crash." |
 
 ## How to run any of them
 
@@ -200,7 +202,7 @@ result = await run_graph(nodes, task, router=graph,        # 7: teamwork
 # Set up once
 pip install -e ".[dev]"
 
-# Examples 01-04, 06-08, 10, 13-19, 23-30 — no API key, no extras needed
+# Examples 01-04, 06-08, 10, 13-19, 23-31 — no API key, no extras needed
 python examples/01_hello_allow.py
 python examples/02_block_dangerous.py
 python examples/03_preview_writes.py
@@ -224,6 +226,7 @@ python examples/27_handoff_graph.py
 python examples/28_full_stack_pipeline.py
 python examples/29_memory_gating.py
 python examples/30_cost_attribution.py
+python examples/31_kill_switch.py
 
 # Example 05 — needs a real LLM API key
 export ANTHROPIC_API_KEY=sk-ant-...     # or OPENAI_API_KEY=sk-...
@@ -296,6 +299,7 @@ There is no `lynx ps` / `lynx audit` — Lynx itself holds no past runs. (`lynx 
 | Full-stack composition | Graph + policy + approvals + executors + metering + durability in ONE run | 28 |
 | Memory gating (ASI06) | remember/recall/forget through policy — all five verdicts on one surface | 29 |
 | Cost attribution / FinOps | Per-customer chargeback sink joining run.started + step.usage | 30 |
+| Kill-switch + repetition gate | `cancel=CancelToken()`, `Budget(max_repeated_calls=)` — stop runaways cleanly | 31 |
 | Web service integration | FastAPI / Flask / Django | 09 / 11 / 12 |
 | Real LLM | ClaudeAgent / OpenAIAgent (proper `async with` lifetime) | 05 |
 

@@ -5,7 +5,11 @@ All notable changes to Lynx will be documented here. Format follows [Keep a Chan
 ## [Unreleased]
 
 ### Added
-- (nothing yet)
+- **Kill-switch (cooperative cancellation)** — `run_agent(..., cancel=CancelToken())` (and `run_graph`). The kernel checks the token at every step boundary AND immediately before each tool executes, so a cancelled run stops after at most one in-flight model/tool call — never the rest of the run. Emits `run.cancelled` / `graph.cancelled`; `RunResult.error` starts with `"cancelled:"`. `CancelToken` is a stdlib one-way latch (idempotent, first reason wins); any object with `cancelled`/`reason` (the `Cancelled` protocol) works. Both exported from `lynx`.
+- **Repetition gate** — `Budget(max_repeated_calls=N)` trips the classic "same tool, same args, forever" loop, keyed on tool + canonical args so a genuinely different argument resets the streak.
+- Example 31 (`31_kill_switch.py`): a live kill-switch flipped mid-run + the repetition gate breaking an identical-call loop.
+- Integration cookbook: an OpenTelemetry GenAI sink recipe (Lynx as a drop-in source for Langfuse/Phoenix/Datadog) and an audit-stream-as-live-event-feed pattern for UIs.
+- `docs/what-lynx-is-and-isnt.md` — explicit scope boundary: what Lynx owns vs. what it composes with (mem0/Zep, Langfuse/Phoenix, LiteLLM, MCP gateways, Temporal, ...).
 
 ## [2.4.1] — 2026-06-12
 

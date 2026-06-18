@@ -11,6 +11,7 @@ from lynx.approvals import (
     callback_approval,
     cli_prompt_approval,
 )
+from lynx.cancel import Cancelled, CancelToken
 from lynx.core.scheduler import run_agent
 from lynx.core.types import (
     ActionRequest,
@@ -93,6 +94,8 @@ __all__ = [
     "ApprovalRequest",
     "AuditEvent",
     "Budget",
+    "CancelToken",
+    "Cancelled",
     "Decision",
     "DuplicateRecord",
     "ExecutionContext",

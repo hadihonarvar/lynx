@@ -28,6 +28,7 @@ from lynx.core.types import (
     ToolCall,
     ToolSet,
     Usage,
+    canonical_json,
     new_correlation_id,
     now_utc,
 )
@@ -44,6 +45,7 @@ from lynx.durability import (
 
 if TYPE_CHECKING:
     from lynx.approvals import ApprovalHandler
+    from lynx.cancel import Cancelled
     from lynx.durability import RunStore
     from lynx.executors import Executor
     from lynx.sdk import Agent
@@ -90,6 +92,7 @@ async def run_agent(
     store: RunStore | None = None,
     run_id: str | None = None,
     executor: Executor | None = None,
+    cancel: Cancelled | None = None,
 ) -> RunResult:
     """Run an agent through one task. Stateless unless you pass a store.
 
@@ -127,6 +130,11 @@ async def run_agent(
                       or your own Docker/microVM ``Executor`` — Lynx defines
                       the seam; the isolation behind it is yours. Dry-runs
                       always call the shadow in-process.
+        cancel:       Optional kill-switch (``CancelToken`` or any object with
+                      ``cancelled``/``reason``). Checked at every step boundary
+                      and immediately before each tool executes; once tripped
+                      the run stops with ``error="cancelled: <reason>"`` after
+                      at most one in-flight model or tool call.
 
     Returns:
         ``RunResult`` with final_answer, error, steps_taken, correlation_id,
@@ -179,6 +187,7 @@ async def run_agent(
     seq_counter = 0
     started_emitted = False
     step_seq = 0
+    call_counts: dict[str, int] = {}  # idempotency_key -> times proposed (repetition gate)
 
     async def emit(kind: str, body_payload: dict) -> int:
         nonlocal seq_counter
@@ -318,6 +327,18 @@ async def run_agent(
         conversation: tuple[Message, ...] = (Message(role="user", content=task),)
 
         while True:
+            # ---- kill-switch: stop before doing any more work
+            if cancel is not None and cancel.cancelled:
+                reason = cancel.reason or "cancelled by caller"
+                await emit("run.cancelled", {"reason": reason, "at": "step_boundary"})
+                return RunResult(
+                    correlation_id=cid,
+                    bundle_id=policy.id,
+                    error=f"cancelled: {reason}",
+                    steps_taken=step_seq,
+                    usage=usage_totals(),
+                )
+
             # ---- budget enforcement
             if budget.steps is not None and step_seq >= budget.steps:
                 await emit("run.failed", {"reason": f"step budget {budget.steps} exhausted"})
@@ -540,6 +561,27 @@ async def run_agent(
                 "step.proposed",
                 {"seq": step_seq, "tool": request.tool, "args": dict(request.args)},
             )
+
+            # ---- repetition gate: the classic "same tool, same args, forever"
+            # loop. Keyed on tool + canonical args (step-independent), so a
+            # genuinely different argument never trips it.
+            if budget.max_repeated_calls is not None:
+                repeat_key = f"{request.tool}|{canonical_json(dict(request.args))}"
+                call_counts[repeat_key] = call_counts.get(repeat_key, 0) + 1
+                if call_counts[repeat_key] > budget.max_repeated_calls:
+                    reason = (
+                        f"repeated call limit exhausted "
+                        f"({budget.max_repeated_calls}): {request.tool} with identical args"
+                    )
+                    await emit("run.failed", {"reason": reason, "seq": step_seq})
+                    return RunResult(
+                        correlation_id=cid,
+                        bundle_id=policy.id,
+                        error=reason,
+                        steps_taken=step_seq,
+                        usage=usage_totals(),
+                    )
+
             if uncertain:
                 await emit(
                     "action.uncertain",
@@ -575,6 +617,22 @@ async def run_agent(
                     "action.intent",
                     {"step": step_seq, "tool": request.tool, "verdict": verdict},
                     idem=action_key,
+                )
+
+            # ---- kill-switch: last check before a real side effect. Catches a
+            # cancel that arrived while policy was deciding or an approval was
+            # pending — so a cancelled run never executes one more action.
+            if cancel is not None and cancel.cancelled:
+                reason = cancel.reason or "cancelled by caller"
+                await emit(
+                    "run.cancelled", {"reason": reason, "at": "pre_execute", "seq": step_seq}
+                )
+                return RunResult(
+                    correlation_id=cid,
+                    bundle_id=policy.id,
+                    error=f"cancelled: {reason}",
+                    steps_taken=step_seq,
+                    usage=usage_totals(),
                 )
 
             # ---- mediate the action

@@ -134,6 +134,11 @@ class Budget:
     output_tokens: int | None = None
     tokens: int | None = None  # combined input + output
     step_timeout_seconds: float | None = None  # per agent.step() model call
+    # Trip the run if the same (tool, args) action is proposed more than this
+    # many times — the classic "agent calls the same tool in a loop" failure.
+    # None = no limit. Identical calls are keyed by tool + canonical args, so a
+    # genuinely different argument resets the streak.
+    max_repeated_calls: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
