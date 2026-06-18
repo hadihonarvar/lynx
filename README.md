@@ -639,6 +639,7 @@ v1 will keep getting security fixes per the SECURITY.md policy.
 
 - [`docs/v2-rfc.md`](docs/v2-rfc.md) — the original v2-rewrite RFC (historical design record)
 - [`docs/concepts.md`](docs/concepts.md) — vocabulary
+- [`docs/what-lynx-is-and-isnt.md`](docs/what-lynx-is-and-isnt.md) — what Lynx owns vs. what it composes with (mem0/Zep, Langfuse, LiteLLM, MCP gateways, Temporal)
 - [`docs/cookbook.md`](docs/cookbook.md) — policy patterns (YAML)
 - [`docs/integration-cookbook.md`](docs/integration-cookbook.md) — wiring patterns for sinks (SQLite / Postgres / Splunk / OTel / HTTP) + approval handlers (Slack / email / webhook) + durability `RunStore` backends (Redis / Postgres / files / Temporal)
 - [`docs/faq.md`](docs/faq.md) — common questions

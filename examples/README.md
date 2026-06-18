@@ -311,6 +311,7 @@ After running through the examples:
 |--------------|------|
 | Understand the design | [`docs/v2-rfc.md`](../docs/v2-rfc.md) |
 | Understand the vocabulary | [`docs/concepts.md`](../docs/concepts.md) |
+| Know what Lynx is / isn't (scope, what it composes with) | [`docs/what-lynx-is-and-isnt.md`](../docs/what-lynx-is-and-isnt.md) |
 | Build your own policy from scratch | [`docs/02-policy-language.md`](../docs/02-policy-language.md) |
 | Copy-paste common policy patterns | [`docs/cookbook.md`](../docs/cookbook.md) |
 | Wire sinks / approvals into your stack (SQLite, Postgres, Splunk, OTel, Slack, Temporal, ...) | [`docs/integration-cookbook.md`](../docs/integration-cookbook.md) |
