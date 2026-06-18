@@ -20,6 +20,145 @@ FULL COVERAGE   13 → 30              "every feature: python rules, transform o
                                        cost attribution, full-stack capstone"
 ```
 
+## Features at a glance — with code
+
+The eight things Lynx does, in priority order, each in its minimal form.
+Every snippet is the real API trimmed to its essence; the **example** column
+links to a runnable version.
+
+### 1. A safety gate on every agent action
+Every real action is checked against rules your team wrote and reviewed —
+allow, block, preview, rewrite, or ask a human. The agent can't skip the gate.
+
+```yaml
+# policy.yaml — reviewed in a PR like any code
+rules:
+  - { id: no-root-rm, match: { tool: shell, args.cmd.matches: "rm -rf /" }, decision: deny }
+```
+```python
+result = await run_agent(agent, "clean up old logs",
+                         tools=tools, policy=load_policy_file("policy.yaml"))
+# the agent's `rm -rf /` is blocked; it sees "[denied] ..." and adapts
+```
+→ examples **01, 02, 10**
+
+### 2. Never do damage twice
+If a run crashes and gets retried, finished steps replay from your journal —
+customers aren't double-charged, AI work isn't paid for twice.
+
+```python
+result = await run_agent(agent, task, tools=tools, policy=policy,
+                         store=my_store,            # 2 methods on YOUR Redis/Postgres
+                         run_id="invoice-778")      # stable across retries
+# crash → your queue retries the same call → the charge happens exactly once
+```
+→ example **24**
+
+### 3. A complete audit trail — kept in *your* systems
+Every proposal, decision, and outcome streams to the tools you already own.
+Lynx itself stores nothing.
+
+```python
+with open("audit.jsonl", "a") as f:
+    await run_agent(agent, task, tools=tools, policy=policy,
+                    sinks=(jsonl_sink(f),))   # every event → your file/SIEM/OTel
+```
+→ examples **06, 15**
+
+### 4. Humans stay in the loop where it matters
+High-stakes actions pause for sign-off (with enforced time limits); risky-but-
+routine ones can show a preview before anything is touched.
+
+```yaml
+  - { id: big-refunds-ask, match: { tool: refund, args.amount.gt: 100 }, decision: approve_required }
+  - { id: preview-deletes, match: { tool: delete_file }, decision: dry_run }
+```
+```python
+await run_agent(agent, task, tools=tools, policy=policy,
+                on_approval=cli_prompt_approval())   # or your Slack handler
+```
+→ examples **03, 04, 16**
+
+### 5. Cost visibility and hard spending brakes
+Every step's AI usage is measured and attributable; runaway loops stop before
+the bill becomes a story.
+
+```python
+result = await run_agent(agent, task, tools=tools, policy=policy,
+                         budget=Budget(output_tokens=50_000),  # hard brake
+                         sinks=(my_cost_sink,))                # per-step usage → your rates
+result.usage   # Usage(input_tokens=..., output_tokens=...) — the receipt
+```
+→ examples **25, 30**
+
+### 6. Run risky work in a contained place
+Approved actions run in-process, in a throwaway process, or inside *your*
+sandbox — chosen per tool, refusing to run if the required isolation is missing.
+
+```python
+@tool(scope=("compute:exec",), isolation="container")
+async def run_code(snippet: str) -> str: ...
+
+await run_agent(agent, task, tools=tools, policy=policy,
+                executor=route_executor({
+                    None: inline_executor(),
+                    "container": my_docker_executor,   # ~20 lines, yours
+                }))
+# a tool asking for isolation you didn't provide fails closed — never on the host
+```
+→ examples **18, 26**
+
+### 7. Multi-agent teamwork with enforced job descriptions
+Workflows where each agent's permissions are *enforced*, not suggested. An
+agent that oversteps its role is blocked and the work routes onward; loops are capped.
+
+```python
+nodes = {
+    "triage":   GraphNode(agent=triage,   tools=tools, policy=read_only),
+    "fixer":    GraphNode(agent=fixer,    tools=tools, policy=can_write),
+    "reviewer": GraphNode(agent=reviewer, tools=tools, policy=read_only),
+}
+graph = compile_graph("""
+start: triage
+max_transitions: 8
+edges:
+  - { from: triage,   when: { answer_matches: "needs fix" }, to: fixer }
+  - { from: fixer,    to: reviewer }
+  - { from: reviewer, when: { answer_matches: "approved" },  to: done }
+  - { from: reviewer, to: fixer }
+""")
+result = await run_graph(nodes, "Fix the bug", router=graph)
+# if triage tries to write, ITS policy blocks it — role enforced, not prompted
+```
+→ examples **27, 28**
+
+### 8. Works with what you already have
+Plugs into the frameworks teams already use, and brings zero infrastructure of
+its own — no database, no server, three small dependencies.
+
+```bash
+pip install lynx-agent                       # 3 dependencies, no server, no DB
+```
+```python
+agent = ClaudeAgent(tools=tools)             # or OpenAIAgent / LangGraphAgent /
+result = await run_agent(agent, task,        #    CrewAIAgent / mcp_tools / your own
+                         tools=tools, policy=policy)
+```
+→ examples **05, 20, 21, 22**
+
+### It all composes — one function call
+Every feature above is a keyword argument on a single call (this is example 28
+in miniature):
+
+```python
+result = await run_graph(nodes, task, router=graph,        # 7: teamwork
+                         executor=executor,                # 6: containment
+                         sinks=(audit, cost_sink),         # 3 + 5: audit & cost
+                         store=store, run_id="ticket-42")  # 2: never twice
+# 1 & 4 live in each node's policy YAML; 8 is whatever agents you brought
+```
+→ example **28** (the full-stack capstone)
+
 ## The 30 examples
 
 | # | File | Verdict shown | Problem in one line |
