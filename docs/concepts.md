@@ -129,6 +129,19 @@ class Executor(Protocol):
 
 Built-in: `inline_executor()` (default — in-process, identical to pre-seam behavior), `subprocess_executor()` (fresh interpreter + best-effort rlimits; crash protection, NOT a security boundary), `route_executor({...})` (per-tool routing via `@tool(isolation=...)`, failing closed on unrouted hints). The mediator routes allow / transform / approval-granted execution through the executor; TRANSFORM rebuilds the request so the executor sees the *effective* args; dry-runs always call the shadow in-process. A raising executor fails the action, never the run. Real isolation (Docker / gVisor / E2B) is user-implemented — one async callable.
 
+## CancelToken (kill-switch)
+
+A cooperative cancellation latch passed to `run_agent` / `run_graph` as `cancel=`. The kernel checks it at every step boundary **and** immediately before each tool executes, so a cancelled run stops after at most one in-flight model or tool call — never the rest of the run.
+
+```python
+cancel = CancelToken()
+task = asyncio.create_task(run_agent(agent, "...", tools=t, policy=p, cancel=cancel))
+cancel.cancel("user pressed stop")     # from a signal handler, web request, another task
+result = await task                     # result.error == "cancelled: user pressed stop"
+```
+
+`CancelToken` is a stdlib-only one-way latch (idempotent — first reason wins). Any object with `cancelled`/`reason` attributes also works (the `Cancelled` protocol). Emits `run.cancelled` (or `graph.cancelled`).
+
 ## ApprovalHandler
 
 A callable taking one `ApprovalRequest` and returning an `ApprovalDecision`. Called synchronously by the kernel when policy returns `approve_required`.
@@ -173,7 +186,8 @@ No hash chain. No content addressing. Your sink decides retention.
 | `approval.granted` | Handler returned `granted=True` |
 | `approval.denied` | Handler returned `granted=False` |
 | `run.succeeded` | Agent returned FinalAnswer (body has `replayed: true` when a completed run was resumed) |
-| `run.failed` | Budget exhausted / agent.step raised / the RunStore failed mid-run |
+| `run.failed` | Budget exhausted (steps / duration / tokens / repeated-call) / agent.step raised / the RunStore failed mid-run |
+| `run.cancelled` | A `cancel` token was tripped — body `at` is `step_boundary` or `pre_execute` |
 | `run.resumed` | A journaled run was picked up again (store + same run_id) |
 | `run.superseded` | This worker lost the journal race to another worker and exited without executing anything |
 | `run.bundle_changed` | A resume is running under a different policy bundle than the journal was written with — warn-and-continue |
@@ -204,6 +218,7 @@ class Budget:
     output_tokens: int | None = None
     tokens: int | None = None          # combined input + output
     step_timeout_seconds: float | None = None   # per agent.step() model call
+    max_repeated_calls: int | None = None       # trip the same-tool-same-args loop
 ```
 
 The scheduler uses a monotonic clock for `duration_seconds`, so wall-clock NTP jumps cannot exhaust (or extend) the budget. Checks happen between steps; a single hung tool call is not interrupted by `duration_seconds` — bound tools at the executor seam (`inline_executor(timeout_seconds=…)` cancels cooperative tools; `subprocess_executor` kills even tight CPU loops). Token caps stop the *next* model call — the step that crossed the cap already happened — and never trigger for agents that report no usage. `step_timeout_seconds` is the exception to "between steps": it wraps each `agent.step()` call itself, so a hung provider connection fails the run (`error="agent.step timed out after Ns"`) instead of hanging it forever — and since nothing journals until the step returns, a timed-out step leaves no record and resume simply re-asks the model.

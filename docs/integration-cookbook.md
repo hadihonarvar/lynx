@@ -289,6 +289,89 @@ The pattern is always: a 5–10 line `async def my_sink_or_handler(...)` that ta
 
 ---
 
+## OpenTelemetry — emit Lynx events as GenAI spans
+
+Lynx ships no tracer (zero dependencies), but its audit stream is the exact
+data an observability backend wants. A sink can map each `AuditEvent` to an
+OpenTelemetry span using the [GenAI semantic conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/)
+— so Lynx becomes a drop-in source for Langfuse, Phoenix, Datadog, Grafana,
+or any OTLP collector, without Lynx depending on any of them.
+
+```python
+# pip install opentelemetry-sdk opentelemetry-exporter-otlp  (YOUR deps)
+from opentelemetry import trace
+from lynx import callback_sink
+
+tracer = trace.get_tracer("lynx")
+
+def otel_sink():
+    spans = {}  # correlation_id -> the run's root span
+    def sink_fn():
+        async def sink(event):
+            if event.kind == "run.started":
+                spans[event.correlation_id] = tracer.start_span(
+                    "lynx.run", attributes={"gen_ai.operation.name": "agent"}
+                )
+            elif event.kind == "step.usage":
+                # GenAI-convention attributes — Lynx's Usage fields already match
+                span = spans.get(event.correlation_id)
+                if span:
+                    span.add_event("gen_ai.usage", attributes={
+                        "gen_ai.usage.input_tokens": event.body.get("input_tokens") or 0,
+                        "gen_ai.usage.output_tokens": event.body.get("output_tokens") or 0,
+                        "gen_ai.request.model": event.body.get("model") or "",
+                    })
+            elif event.kind in ("action.completed", "action.denied", "action.failed"):
+                span = spans.get(event.correlation_id)
+                if span:
+                    span.add_event(event.kind, attributes={"lynx.seq": event.seq})
+            elif event.kind in ("run.succeeded", "run.failed", "run.cancelled"):
+                span = spans.pop(event.correlation_id, None)
+                if span:
+                    span.set_attribute("lynx.outcome", event.kind)
+                    span.end()
+        return sink
+    return callback_sink(sink_fn())
+
+await run_agent(..., sinks=(otel_sink(),))
+```
+
+`Usage` field names (`input_tokens`, `output_tokens`, `cache_read_tokens`)
+are already aligned to the GenAI convention, so the mapping is a rename, not
+a transform. Lynx is the firehose; OTel is one consumer of it.
+
+## Consume the audit stream as a live agent-event feed
+
+The same events drive a UI ("show me what the agent is doing"): tool
+proposals, approvals, completions, cancellations all flow through your sink
+in real time. A queue-backed sink turns the push stream into an async
+iterator a web handler can `async for` over:
+
+```python
+import asyncio
+from lynx import callback_sink
+
+def event_feed():
+    q: asyncio.Queue = asyncio.Queue()
+    async def sink(event):
+        await q.put(event)
+    async def stream():
+        while True:
+            event = await q.get()
+            yield event
+            if event.kind in ("run.succeeded", "run.failed", "run.cancelled"):
+                return
+    return callback_sink(sink), stream
+
+sink, stream = event_feed()
+task = asyncio.create_task(run_agent(..., sinks=(sink,)))
+async for event in stream():          # push to SSE / WebSocket / your UI
+    ...                               # token streaming itself stays the provider's job
+await task
+```
+
+---
+
 ## Executors — bring your own isolation
 
 The executor seam is one async callable: `(request, tool) -> ActionResult`.

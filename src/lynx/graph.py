@@ -61,6 +61,7 @@ if TYPE_CHECKING:
     import re
 
     from lynx.approvals import ApprovalHandler
+    from lynx.cancel import Cancelled
     from lynx.durability import RunStore
     from lynx.executors import Executor
     from lynx.sdk import Agent
@@ -339,6 +340,7 @@ async def run_graph(
     executor: Executor | None = None,
     store: RunStore | None = None,
     run_id: str | None = None,
+    cancel: Cancelled | None = None,
 ) -> GraphResult:
     """Run a sequential, policy-bounded multi-node workflow.
 
@@ -430,6 +432,17 @@ async def run_graph(
     path: list[NodeOutcome] = []
 
     while True:
+        # ---- kill-switch: stop between nodes (each node run also honors it)
+        if cancel is not None and cancel.cancelled:
+            reason = cancel.reason or "cancelled by caller"
+            await emit("graph.cancelled", {"reason": reason, "hops": hops})
+            return GraphResult(
+                final=path[-1].result if path else None,
+                path=tuple(path),
+                transitions=hops,
+                error=f"cancelled: {reason}",
+            )
+
         if hops >= bound:
             await emit("graph.exhausted", {"max_transitions": bound})
             return GraphResult(
@@ -471,10 +484,15 @@ async def run_graph(
             executor=executor,
             store=store,
             run_id=child_run_id,
+            cancel=cancel,
         )
 
         outcome = NodeOutcome(node=current, result=result, denials=denials, transitions=hops)
         path.append(outcome)
+
+        if result.error is not None and result.error.startswith("cancelled:"):
+            await emit("graph.cancelled", {"reason": result.error, "hops": hops})
+            return GraphResult(final=result, path=tuple(path), transitions=hops, error=result.error)
 
         if result.error is not None and result.error.startswith("superseded:"):
             return GraphResult(
