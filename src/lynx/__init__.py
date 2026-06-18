@@ -82,7 +82,7 @@ from lynx.sinks import (
     stdout_sink,
 )
 
-__version__ = "2.4.1"
+__version__ = "2.5.0"
 
 __all__ = [
     "ActionRequest",
