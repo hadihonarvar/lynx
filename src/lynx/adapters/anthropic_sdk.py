@@ -31,6 +31,11 @@ from typing import Any
 from lynx.adapters._schema import toolset_to_anthropic_tools
 from lynx.core.types import FinalAnswer, Message, ToolCall, ToolSet, Usage
 
+# An ``ephemeral`` cache breakpoint: Anthropic caches the whole prompt prefix
+# up to (and including) the block it's attached to, then reads it back on the
+# next call within the cache lifetime instead of re-billing it at full rate.
+_CACHE_CONTROL: dict[str, str] = {"type": "ephemeral"}
+
 
 def _usage_from_response(response: Any, model: str) -> Usage | None:
     """Map an Anthropic Messages API usage block to a Lynx Usage record."""
@@ -83,8 +88,19 @@ class ClaudeAgent:
         model: str = "claude-opus-4-7",
         system: str = "",
         max_tokens: int = 4096,
+        cache_prompt: bool = True,
         client: Any | None = None,
     ) -> None:
+        """``cache_prompt`` (default ``True``) turns on Anthropic prompt
+        caching: the static prefix — the system prompt and the tool schemas —
+        is marked with a cache breakpoint, and a second breakpoint trails the
+        growing conversation, so each step re-reads the prior turns from cache
+        instead of re-billing them at full input rate. The adapter already
+        reports ``cache_read_tokens`` / ``cache_write_tokens`` on ``Usage``;
+        this is what makes those numbers non-zero. Caching is silently ignored
+        by the API below its minimum prefix size, so it is safe to leave on;
+        set ``cache_prompt=False`` to send plain, unmarked prompts.
+        """
         if client is None:
             try:
                 from anthropic import AsyncAnthropic
@@ -99,9 +115,25 @@ class ClaudeAgent:
             self._owns_client = False
         self._client = client
         self._tools = tools
-        self._tool_defs = toolset_to_anthropic_tools(tools)
+        self._cache_prompt = cache_prompt
+        tool_defs = toolset_to_anthropic_tools(tools)
+        if cache_prompt and tool_defs:
+            # Breakpoint on the last (static) tool schema caches the system
+            # prompt + every tool definition. Shallow-copy so the shared
+            # schema list returned by the builder is never mutated.
+            tool_defs = [
+                *tool_defs[:-1],
+                {**tool_defs[-1], "cache_control": dict(_CACHE_CONTROL)},
+            ]
+        self._tool_defs = tool_defs
         self._model = model
         self._system = system
+        if cache_prompt and system:
+            self._system_param: Any = [
+                {"type": "text", "text": system, "cache_control": dict(_CACHE_CONTROL)}
+            ]
+        else:
+            self._system_param = system
         self._max_tokens = max_tokens
 
     async def aclose(self) -> None:
@@ -126,10 +158,10 @@ class ClaudeAgent:
         kwargs: dict[str, Any] = {
             "model": self._model,
             "max_tokens": self._max_tokens,
-            "messages": _to_anthropic_messages(conversation),
+            "messages": _to_anthropic_messages(conversation, cache_prompt=self._cache_prompt),
         }
         if self._system:
-            kwargs["system"] = self._system
+            kwargs["system"] = self._system_param
         if self._tool_defs:
             kwargs["tools"] = self._tool_defs
 
@@ -160,7 +192,27 @@ class ClaudeAgent:
         return FinalAnswer(text="\n".join(text_parts).strip() or "(no response)", usage=usage)
 
 
-def _to_anthropic_messages(conversation: tuple[Message, ...]) -> list[dict[str, Any]]:
+def _mark_cache(content: Any) -> Any:
+    """Attach a cache breakpoint to the last content block of a message.
+
+    Strings are promoted to a single text block first. An empty string has
+    nothing worth caching and is returned untouched (Anthropic rejects an
+    empty text block carrying ``cache_control``).
+    """
+    if isinstance(content, str):
+        if not content:
+            return content
+        return [{"type": "text", "text": content, "cache_control": dict(_CACHE_CONTROL)}]
+    if not content:
+        return content
+    blocks = list(content)
+    blocks[-1] = {**blocks[-1], "cache_control": dict(_CACHE_CONTROL)}
+    return blocks
+
+
+def _to_anthropic_messages(
+    conversation: tuple[Message, ...], *, cache_prompt: bool = False
+) -> list[dict[str, Any]]:
     """Translate lynx Messages into the Anthropic Messages API shape.
 
     Tool results become user-role messages with ``tool_result`` content blocks.
@@ -173,6 +225,11 @@ def _to_anthropic_messages(conversation: tuple[Message, ...]) -> list[dict[str, 
 
     Consecutive same-role entries are merged so the API never receives two
     user (or two assistant) messages in a row.
+
+    When ``cache_prompt`` is set, a cache breakpoint is attached to the final
+    message's last content block: the prior turns become a cached prefix that
+    the next step reads back instead of re-billing — the fix for the
+    quadratic input-token growth of a long, fully re-sent agent loop.
     """
     out: list[dict[str, Any]] = []
 
@@ -224,4 +281,6 @@ def _to_anthropic_messages(conversation: tuple[Message, ...]) -> list[dict[str, 
                     }
                 ],
             )
+    if cache_prompt and out:
+        out[-1]["content"] = _mark_cache(out[-1]["content"])
     return out

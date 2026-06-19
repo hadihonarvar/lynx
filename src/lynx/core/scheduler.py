@@ -18,6 +18,7 @@ from lynx.core.mediator import mediate
 from lynx.core.policy import PolicyBundle, evaluate
 from lynx.core.types import (
     ActionRequest,
+    ActionResult,
     AuditEvent,
     Budget,
     ExecutionContext,
@@ -46,6 +47,7 @@ from lynx.durability import (
 if TYPE_CHECKING:
     from lynx.approvals import ApprovalHandler
     from lynx.cancel import Cancelled
+    from lynx.compressors import Compressor
     from lynx.durability import RunStore
     from lynx.executors import Executor
     from lynx.sdk import Agent
@@ -93,6 +95,7 @@ async def run_agent(
     run_id: str | None = None,
     executor: Executor | None = None,
     cancel: Cancelled | None = None,
+    compressor: Compressor | None = None,
 ) -> RunResult:
     """Run an agent through one task. Stateless unless you pass a store.
 
@@ -135,6 +138,17 @@ async def run_agent(
                       and immediately before each tool executes; once tripped
                       the run stops with ``error="cancelled: <reason>"`` after
                       at most one in-flight model or tool call.
+        compressor:   Optional ``Compressor`` (token optimization seam). Each
+                      fresh *successful, string-valued* tool result is passed
+                      through it before entering the conversation, so the
+                      compressed text is what the model sees, what the journal
+                      records, and what a resumed run replays (errors and
+                      non-string values bypass it). Default: ``None`` (no
+                      compression). Fails open — a compressor that raises is
+                      logged via ``step.compress_failed`` and the original
+                      result is used, never dropped. Replayed results are not
+                      re-compressed (they were already compressed when first
+                      journaled).
 
     Returns:
         ``RunResult`` with final_answer, error, steps_taken, correlation_id,
@@ -646,6 +660,47 @@ async def run_agent(
                 )
 
             result = await mediate(request, decision, tools, on_approval, executor)
+
+            # ---- result compression (token optimization seam). Applied to
+            # FRESH executions only — a replayed result took this path in a
+            # prior attempt and was journaled already-compressed, so it is fed
+            # back verbatim above. Compress BEFORE the tag/journal/conversation
+            # below so the smaller text is what the model sees, what the
+            # journal stores, and what a future replay returns. Fail OPEN: a
+            # broken compressor must never drop a tool's real output.
+            if compressor is not None and result.ok and isinstance(result.value, str):
+                before_chars = len(result.value)
+                try:
+                    compressed = await compressor(result, request, tool_def)
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:
+                    compressed = result
+                    await emit(
+                        "step.compress_failed",
+                        {
+                            "seq": step_seq,
+                            "tool": request.tool,
+                            "error": f"{type(exc).__name__}: {exc}",
+                        },
+                    )
+                if isinstance(compressed, ActionResult) and isinstance(compressed.value, str):
+                    after_chars = len(compressed.value)
+                    if after_chars < before_chars:
+                        result = compressed
+                        await emit(
+                            "step.compressed",
+                            {
+                                "seq": step_seq,
+                                "tool": request.tool,
+                                "before_chars": before_chars,
+                                "after_chars": after_chars,
+                                # A rough ~4-chars-per-token estimate — the
+                                # kernel never invents exact token counts it
+                                # didn't get from a provider.
+                                "est_tokens_saved": (before_chars - after_chars) // 4,
+                            },
+                        )
 
             # ---- one ladder decides both the conversation tag and the audit
             # event kind, so they can never drift apart.

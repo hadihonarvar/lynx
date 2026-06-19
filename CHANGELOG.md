@@ -7,6 +7,50 @@ All notable changes to Lynx will be documented here. Format follows [Keep a Chan
 ### Added
 - (nothing yet)
 
+## [2.6.0] — 2026-06-18
+
+The token-optimization release — two complementary ways to cut the token
+bill of a long agent loop, both honoring the same boundary: **Lynx is not a
+token optimizer; it owns the seam where yours plugs in**, and fixes its own
+adapter to stop leaking. Zero new dependencies.
+
+### Added
+- **Compressor seam (`compressor=` on `run_agent`)** — a pluggable
+  `Compressor`: `async (result, request, tool) -> result`, applied to every
+  fresh successful string result *before* it enters the conversation, the
+  journal, and any replay. A large tool output trimmed once is not re-sent in
+  full on every subsequent step — the saving compounds. Default is `None` (no
+  compression; behavior unchanged). **Fails open**: a compressor that raises
+  is logged via `step.compress_failed` and the original result is used, never
+  dropped — a token optimizer must never silently swallow a real output.
+  Emits `step.compressed` (`before_chars` / `after_chars` / `est_tokens_saved`)
+  so the saving is measurable.
+- **Reference compressors** (pure Python, no binary, conveniences not policy):
+  `identity_compressor`, `truncate_compressor` (head+tail elision),
+  `dedup_compressor` (collapse repeated lines → `line  (xN)`),
+  `compose_compressors`, `route_compressor` (per-tool via the new
+  `@tool(compress="...")` hint — mirrors `route_executor`/`isolation`, but a
+  missing route fails *open*, not closed), and `external_filter_compressor`
+  (pipe text through any external filter binary over stdin/stdout). All
+  exported from `lynx`.
+- **Anthropic prompt caching** — `ClaudeAgent(..., cache_prompt=True)` (default
+  on) marks the system prompt, the tool schemas, and the conversation prefix
+  with `cache_control` breakpoints, so a long loop re-reads prior turns from
+  cache instead of re-billing them at full input rate. The adapter already
+  *reported* `cache_read_tokens` / `cache_write_tokens`; this is what makes
+  those numbers non-zero. Set `cache_prompt=False` for plain prompts.
+- Example 32 (`32_token_optimization.py`): the compressor seam with per-tool
+  routing (dedup+truncate, default cap, and one tool opting out), live
+  `step.compressed` savings, and notes on wiring the real RTK binary at the
+  tool level and on the adapter-level prompt caching.
+
+### Note on RTK
+- RTK (github.com/rtk-ai/rtk, "Rust Token Killer") saves tokens by *running
+  the command itself* and exposes no stdin-filter mode, so it cannot
+  post-process a result Lynx already produced. Wire it at the **tool** level
+  (your shell tool runs `rtk <cmd>` / `rtk proxy <cmd>`); use the compressor
+  seam for the framework-native truncate/dedup pass on every other tool.
+
 ## [2.5.0] — 2026-06-17
 
 The operability release — closes the loudest gaps from an agentic-workflow

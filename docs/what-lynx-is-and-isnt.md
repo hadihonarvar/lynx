@@ -48,7 +48,8 @@ Lynx **integrates with** them rather than reimplementing them.
 | **Eval platform** (datasets, LLM-judge, scoring UI) | Datasets + judges + dashboards are a product. Lynx's audit + `replay()` are the *substrate* evals consume. | DeepEval, Confident AI, Arize, Braintrust |
 | **Retrieval / RAG** | A knowledge-base concern; expose it as a tool and gate it. | LlamaIndex, your vector DB, as a `@tool` |
 | **Agent identity / credential brokering** (scoped tokens, rotation) | Network-resident infra, not a pip install. Lynx *gates on* identity; it doesn't issue it. | MCP gateways, SPIFFE/SVID, your IdP |
-| **LLM gateway** (routing, failover, semantic caching) | A network proxy. Lynx meters and caps in-process; it isn't a proxy. | LiteLLM, Portkey, Bifrost |
+| **LLM gateway** (routing, failover, semantic caching) | A network *proxy* — a separate hop. Lynx meters, caps, and (opt-in) compresses tool results in-process; it isn't a proxy. In-process *prompt* caching lives in the adapter (`ClaudeAgent(cache_prompt=True)`); a cross-request *semantic* cache is the gateway's job. | LiteLLM, Portkey, Bifrost |
+| **Token optimization** (deciding *what* to drop from a result) | A model- and domain-specific strategy. Lynx owns the `compressor=` seam and ships truncate/dedup conveniences; *which* bytes are worth keeping is yours — the same stance as "you bring the sandbox." | your own `Compressor`, `external_filter_compressor`, RTK at the tool level |
 | **Deployment / serving / fleet** (REST, containers, scaling, cron) | The host's job; Lynx is a library you embed in your service. | FastAPI/your framework, k8s, Temporal/Inngest |
 | **Prompt registry / versioning** | Caller-owned config management. | MLflow, LangWatch, your VCS |
 | **Memory/context summarization quality** | A strategy that's model- and domain-specific. Lynx gives the trigger hook (token metering, memory-as-policy); you supply the strategy. | your own, or a memory layer above |

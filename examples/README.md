@@ -1,8 +1,8 @@
 # examples/
 
-A learning path of 31 examples. Each is **self-contained** and starts with a plain-language SCENARIO explaining the problem it solves.
+A learning path of 32 examples. Each is **self-contained** and starts with a plain-language SCENARIO explaining the problem it solves.
 
-Read 01–12 in order for the core narrative; 13–31 cover every remaining feature for full coverage.
+Read 01–12 in order for the core narrative; 13–32 cover every remaining feature for full coverage.
 
 ```
 SIMPLE          01 → 02 → 03         "see the system working"
@@ -10,7 +10,7 @@ MORE COMPLEX    04 → 05 → 06         "approvals, real LLMs, streaming audit"
 ADVANCED        07 → 08 → 09         "production patterns: rules, transforms, web service"
 COMPLETE        10                   "the full thing — one realistic DevOps scenario"
 INTEGRATIONS    11 (Flask) 12 (Django)   "drop Lynx into your existing web framework"
-FULL COVERAGE   13 → 31              "every feature: python rules, transform ops,
+FULL COVERAGE   13 → 32              "every feature: python rules, transform ops,
                                        custom sinks, cross-process approval,
                                        shadow helpers, sandbox, hot-swap,
                                        MCP, LangGraph, CrewAI, error model,
@@ -18,7 +18,8 @@ FULL COVERAGE   13 → 31              "every feature: python rules, transform o
                                        executor seam (BYO sandbox),
                                        handoff graphs, memory gating,
                                        cost attribution, full-stack capstone,
-                                       kill-switch + repetition gate"
+                                       kill-switch + repetition gate,
+                                       token-optimization compressor seam"
 ```
 
 ## Features at a glance — with code
@@ -160,7 +161,7 @@ result = await run_graph(nodes, task, router=graph,        # 7: teamwork
 ```
 → example **28** (the full-stack capstone)
 
-## The 31 examples
+## The 32 examples
 
 | # | File | Verdict shown | Problem in one line |
 |---|------|--------------|---------------------|
@@ -195,6 +196,7 @@ result = await run_graph(nodes, task, router=graph,        # 7: teamwork
 | 29 | [`29_memory_gating.py`](29_memory_gating.py) | memory ops through policy | "Gate remember/recall/forget: poisoning denied, recalls tenant-scoped, deletions previewed + human-approved (OWASP ASI06)." |
 | 30 | [`30_cost_attribution.py`](30_cost_attribution.py) | FinOps attribution sink | "Per-customer × per-model chargeback from run.started + step.usage — your rates, your join, no proxy." |
 | 31 | [`31_kill_switch.py`](31_kill_switch.py) | `CancelToken` + `Budget(max_repeated_calls)` | "Stop a runaway mid-run after one more action; break a same-tool-same-args loop — clean structured stops, no crash." |
+| 32 | [`32_token_optimization.py`](32_token_optimization.py) | `compressor=` + `route_compressor` + `@tool(compress=)` | "Trim a tool's output once at the boundary and it's not re-sent in full every step — dedup/truncate per tool, one tool opting out, savings on the audit stream." |
 
 ## How to run any of them
 
@@ -227,6 +229,7 @@ python examples/28_full_stack_pipeline.py
 python examples/29_memory_gating.py
 python examples/30_cost_attribution.py
 python examples/31_kill_switch.py
+python examples/32_token_optimization.py
 
 # Example 05 — needs a real LLM API key
 export ANTHROPIC_API_KEY=sk-ant-...     # or OPENAI_API_KEY=sk-...

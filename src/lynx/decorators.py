@@ -25,6 +25,7 @@ def tool(
     scope: tuple[str, ...] = (),
     blast_radius_hint: int | None = None,
     isolation: str | None = None,
+    compress: str | None = None,
     name: str | None = None,
     description: str | None = None,
 ) -> Callable[[Callable[..., Awaitable[Any]]], Callable[..., Awaitable[Any]]]:
@@ -70,6 +71,7 @@ def tool(
                 blast_radius_hint=blast_radius_hint,
                 has_shadow=False,
                 isolation=isolation,
+                compress=compress,
             ),
         )
 

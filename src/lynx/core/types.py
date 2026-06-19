@@ -168,6 +168,11 @@ class ToolMetadata:
     # ("subprocess", "container", ... — your vocabulary). None = default
     # route. A hint, not a guarantee — enforcement is the executor's job.
     isolation: str | None = None
+    # Routing hint for route_compressor: which result compressor (if any)
+    # should shrink this tool's output before it enters the model context
+    # ("verbose", "logs", ... — your vocabulary). None = default route. A
+    # hint, not a guarantee — a missing route simply means no compression.
+    compress: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

@@ -12,6 +12,15 @@ from lynx.approvals import (
     cli_prompt_approval,
 )
 from lynx.cancel import Cancelled, CancelToken
+from lynx.compressors import (
+    Compressor,
+    compose_compressors,
+    dedup_compressor,
+    external_filter_compressor,
+    identity_compressor,
+    route_compressor,
+    truncate_compressor,
+)
 from lynx.core.scheduler import run_agent
 from lynx.core.types import (
     ActionRequest,
@@ -82,7 +91,7 @@ from lynx.sinks import (
     stdout_sink,
 )
 
-__version__ = "2.5.0"
+__version__ = "2.6.0"
 
 __all__ = [
     "ActionRequest",
@@ -96,6 +105,7 @@ __all__ = [
     "Budget",
     "CancelToken",
     "Cancelled",
+    "Compressor",
     "Decision",
     "DuplicateRecord",
     "ExecutionContext",
@@ -132,9 +142,13 @@ __all__ = [
     "cli_prompt_approval",
     "compile_graph",
     "compile_policy",
+    "compose_compressors",
+    "dedup_compressor",
     "deny",
     "dry_run",
+    "external_filter_compressor",
     "idempotency_key",
+    "identity_compressor",
     "inline_executor",
     "jsonl_sink",
     "load_graph_file",
@@ -142,6 +156,7 @@ __all__ = [
     "multi_sink",
     "noop_sink",
     "replay",
+    "route_compressor",
     "route_executor",
     "run_agent",
     "run_graph",
@@ -152,4 +167,5 @@ __all__ = [
     "subprocess_executor",
     "tool",
     "transform",
+    "truncate_compressor",
 ]

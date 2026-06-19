@@ -103,7 +103,9 @@ def test_claude_agent_satisfies_agent_protocol():
 @pytest.mark.asyncio
 async def test_claude_agent_extracts_tool_call():
     client = _FakeAnthropicClient(_anthropic_tool_use_response("shell", {"cmd": "ls"}, "call-1"))
-    agent = ClaudeAgent(tools=TOOLS, client=client, system="be careful")
+    # cache_prompt=False keeps the plain (unmarked) prompt shape this test asserts;
+    # prompt caching is exercised by the dedicated tests below.
+    agent = ClaudeAgent(tools=TOOLS, client=client, system="be careful", cache_prompt=False)
     out = await agent.step((Message(role="user", content="list files"),))
     assert isinstance(out, ToolCall)
     assert out.tool == "shell"
@@ -113,6 +115,7 @@ async def test_claude_agent_extracts_tool_call():
     assert client.last_kwargs is not None
     assert client.last_kwargs["tools"][0]["name"] == "shell"
     assert client.last_kwargs["system"] == "be careful"
+    assert "cache_control" not in client.last_kwargs["tools"][0]
 
 
 @pytest.mark.asyncio
@@ -139,6 +142,51 @@ async def test_claude_agent_translates_tool_role_messages():
     assert msgs[-1]["role"] == "user"
     assert msgs[-1]["content"][0]["type"] == "tool_result"
     assert msgs[-1]["content"][0]["tool_use_id"] == "call-1"
+
+
+# ---------------------------------------------------------------------------
+# ClaudeAgent — prompt caching (cache_prompt, default on)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_claude_agent_marks_system_and_tools_for_caching():
+    client = _FakeAnthropicClient(_anthropic_text_response("ok"))
+    agent = ClaudeAgent(tools=TOOLS, client=client, system="be careful")  # cache_prompt default
+    await agent.step((Message(role="user", content="hi"),))
+    kwargs = client.last_kwargs
+    # System is promoted to a block list carrying a cache breakpoint.
+    assert isinstance(kwargs["system"], list)
+    assert kwargs["system"][0]["text"] == "be careful"
+    assert kwargs["system"][0]["cache_control"] == {"type": "ephemeral"}
+    # The last (static) tool schema carries a cache breakpoint.
+    assert kwargs["tools"][-1]["cache_control"] == {"type": "ephemeral"}
+
+
+@pytest.mark.asyncio
+async def test_claude_agent_caches_conversation_prefix():
+    client = _FakeAnthropicClient(_anthropic_text_response("ok"))
+    agent = ClaudeAgent(tools=TOOLS, client=client)
+    conv = (
+        Message(role="user", content="run ls"),
+        Message(role="assistant", content="calling shell"),
+        Message(role="tool", content="file1\nfile2", tool_call_id="call-1"),
+    )
+    await agent.step(conv)
+    msgs = client.last_kwargs["messages"]
+    # The trailing message's last block carries the conversation cache breakpoint.
+    assert msgs[-1]["content"][-1]["cache_control"] == {"type": "ephemeral"}
+    assert msgs[-1]["content"][-1]["type"] == "tool_result"
+
+
+@pytest.mark.asyncio
+async def test_claude_agent_cache_disabled_sends_plain_prompt():
+    client = _FakeAnthropicClient(_anthropic_text_response("ok"))
+    agent = ClaudeAgent(tools=TOOLS, client=client, system="hi", cache_prompt=False)
+    await agent.step((Message(role="user", content="hi"),))
+    kwargs = client.last_kwargs
+    assert kwargs["system"] == "hi"
+    assert "cache_control" not in kwargs["tools"][-1]
 
 
 # ---------------------------------------------------------------------------

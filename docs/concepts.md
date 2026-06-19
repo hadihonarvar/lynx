@@ -129,6 +129,17 @@ class Executor(Protocol):
 
 Built-in: `inline_executor()` (default — in-process, identical to pre-seam behavior), `subprocess_executor()` (fresh interpreter + best-effort rlimits; crash protection, NOT a security boundary), `route_executor({...})` (per-tool routing via `@tool(isolation=...)`, failing closed on unrouted hints). The mediator routes allow / transform / approval-granted execution through the executor; TRANSFORM rebuilds the request so the executor sees the *effective* args; dry-runs always call the shadow in-process. A raising executor fails the action, never the run. Real isolation (Docker / gVisor / E2B) is user-implemented — one async callable.
 
+## Compressor (token optimization seam)
+
+A callable that shrinks one tool result before it enters the model's context. Policy decides *whether* an action runs and the executor decides *where*; the compressor decides *how much of the result the model has to read*. Passed to `run_agent` as `compressor=`.
+
+```python
+class Compressor(Protocol):
+    async def __call__(self, result: ActionResult, request: ActionRequest, tool: ToolDef) -> ActionResult: ...
+```
+
+Applied to every fresh **successful, string-valued** result *before* it enters the conversation, the journal, and any replay — so the compressed text is what the model sees, what's stored, and what a resumed run returns (errors and non-string values bypass it; replayed results are not re-compressed). The saving compounds: a large result trimmed once is not re-sent in full on every later step. Built-in: `identity_compressor()`, `truncate_compressor()` (head+tail elision), `dedup_compressor()` (collapse repeated lines), `compose_compressors(...)`, `route_compressor({...})` (per-tool via `@tool(compress=...)` — but a missing route fails **open**, unlike `route_executor`: an unshrunk result is safe, a token optimizer must never drop output), and `external_filter_compressor(argv)` (pipe text through an external filter binary). A raising compressor fails **open** — the original result is used and a `step.compress_failed` event is emitted; a shrink emits `step.compressed`. Lynx is *not* a token optimizer; it owns the seam. (RTK has no stdin mode — wire it at the tool level; see `examples/32_token_optimization.py`.)
+
 ## CancelToken (kill-switch)
 
 A cooperative cancellation latch passed to `run_agent` / `run_graph` as `cancel=`. The kernel checks it at every step boundary **and** immediately before each tool executes, so a cancelled run stops after at most one in-flight model or tool call — never the rest of the run.
@@ -192,10 +203,12 @@ No hash chain. No content addressing. Your sink decides retention.
 | `run.superseded` | This worker lost the journal race to another worker and exited without executing anything |
 | `run.bundle_changed` | A resume is running under a different policy bundle than the journal was written with — warn-and-continue |
 | `step.usage` | The agent reported token counts for a live step — body has per-step counts, model, and running totals. Not re-emitted for journal-replayed steps (the paying attempt already announced them) |
+| `step.compressed` | A `compressor` shrank a tool result before it entered the conversation — body has `before_chars` / `after_chars` / `est_tokens_saved`. Only when a `compressor` is passed and the result actually got smaller |
+| `step.compress_failed` | A `compressor` raised — the original result was used (fail open), not dropped |
 | `step.replayed` | A completed step was fed back from the journal — no policy re-evaluation, no execution |
 | `action.uncertain` | An intent was journaled without a result in a prior attempt — the action *may* have executed; policy sees `context.extra.uncertain_retry: true` |
 
-The last five only occur when a `RunStore` is passed to `run_agent`.
+The store-only events (`run.resumed`, `run.superseded`, `run.bundle_changed`, `step.replayed`, `action.uncertain`) occur only when a `RunStore` is passed to `run_agent`.
 
 ## Principal
 
