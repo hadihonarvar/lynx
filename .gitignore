@@ -49,3 +49,10 @@ dist/
 # recordings. Local-only. See demo/README.md.
 /demo/
 
+# Agent/session tooling — local only, never commit.
+.claude/
+
+# Audit-log output from running examples (e.g. jsonl_sink, example 06) —
+# runtime artifacts, never source.
+*.jsonl
+
