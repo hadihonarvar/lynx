@@ -7,6 +7,16 @@ All notable changes to Lynx will be documented here. Format follows [Keep a Chan
 ### Added
 - (nothing yet)
 
+## [2.6.4] — 2026-06-18
+
+Docs patch — no library or behavior change.
+
+### Changed
+- README: added a cache-busting query param to the dynamic PyPI version and
+  Python-versions badges so GitHub's image proxy re-fetches them and shows the
+  latest release (the badges were already dynamic; this just forces an
+  immediate refresh).
+
 ## [2.6.3] — 2026-06-18
 
 Lint patch — no library or behavior change.
