@@ -180,7 +180,7 @@ async def main() -> None:
         "forget * (wildcard)",
         "forget targeted",
     ]
-    for op, (verdict, rules) in zip(ops, decisions):
+    for op, (verdict, rules) in zip(ops, decisions, strict=True):
         print(f"  {op:<22} -> {verdict:<17} {rules}")
     print()
     print(f"  final  : {result.final_answer}")
