@@ -109,7 +109,21 @@ Built-in: `stdout_sink`, `jsonl_sink`, `noop_sink`, `multi_sink`, `callback_sink
 
 ## Handoff graph (optional)
 
-Sequential multi-node workflows where each node is one complete `run_agent` call with **its own policy, tools, and budget** — the edge between nodes is a permission boundary. Entirely optional: the kernel knows nothing about graphs.
+A **finite state machine over agents.** Each node is one complete `run_agent` call with **its own policy, tools, and budget**; edges are guarded transitions; `done` is the terminal state. Crucially, the edge between nodes is a *permission boundary* — and routing can key on policy outcomes (denial counts), which a plain FSM can't see. Entirely optional: the kernel knows nothing about graphs.
+
+```
+                  ┌──────────┐  ["needs fix"]   ┌──────────┐        ┌────────────┐
+   start ───────▶ │  triage  │ ───────────────▶ │  fixer   │ ─────▶ │  reviewer  │
+                  │  (read)  │                  │ (write)  │        │   (read)   │
+                  └────┬─────┘                  └──────────┘        └─────┬──────┘
+                       │ [else]                      ▲   ["not approved"] │
+                       ▼                             └────────────────────┤
+                    ( done ) ◀────────────────────────["approved"]────────┘
+
+   states = nodes (each its own policy/tools/budget) · edges = guarded transitions
+   guards: status · answer_matches/error_matches · denials_gt · steps_gt
+   `done` is terminal; `max_transitions` caps the walk → termination guaranteed
+```
 
 ```python
 class Router(Protocol):

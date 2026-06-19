@@ -7,6 +7,18 @@ All notable changes to Lynx will be documented here. Format follows [Keep a Chan
 ### Added
 - (nothing yet)
 
+## [2.6.2] — 2026-06-18
+
+Docs patch — no code changes to the library.
+
+### Added
+- **Handoff graphs documented as a state machine.** `docs/concepts.md` now
+  frames the handoff graph as a finite state machine over agents (nodes =
+  states, guarded edges = transitions, `done` = terminal, `max_transitions`
+  bounds the walk) and includes an ASCII state diagram of the
+  triage → fixer ⇄ reviewer → done flow. Example 27 (`27_handoff_graph.py`)
+  and the examples index gain the "state machine" framing.
+
 ## [2.6.1] — 2026-06-18
 
 Docs/example patch — no code changes to the library.

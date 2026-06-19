@@ -6,7 +6,9 @@ EXAMPLE 27 — "Handoff graph: the edge is a permission boundary" (ADVANCED)
 SCENARIO:
     Multi-agent setups usually fail two ways: the orchestrator agent
     bypasses its role and does the work itself (tool bleed), and handoffs
-    lose context. Lynx's handoff graph fixes both structurally:
+    lose context. Lynx's handoff graph is a finite **state machine** over
+    agents (nodes are states, edges are guarded transitions, `done` is the
+    terminal state) and fixes both structurally:
 
       - each node is one complete run_agent() call with ITS OWN policy,
         tools, and budget — the triage node CANNOT write even if its
