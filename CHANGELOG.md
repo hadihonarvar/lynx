@@ -7,6 +7,16 @@ All notable changes to Lynx will be documented here. Format follows [Keep a Chan
 ### Added
 - (nothing yet)
 
+## [2.6.3] — 2026-06-18
+
+Lint patch — no library or behavior change.
+
+### Fixed
+- `examples/29_memory_gating.py`: `zip(ops, decisions)` now passes
+  `strict=True` (B905). The label list and the collected decisions are both
+  exactly five, so this documents the intended 1:1 pairing without changing
+  behavior. `ruff check` is now clean across `src`, `tests`, and `examples`.
+
 ## [2.6.2] — 2026-06-18
 
 Docs patch — no code changes to the library.
