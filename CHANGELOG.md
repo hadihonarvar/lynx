@@ -7,6 +7,21 @@ All notable changes to Lynx will be documented here. Format follows [Keep a Chan
 ### Added
 - (nothing yet)
 
+## [2.6.1] — 2026-06-18
+
+Docs/example patch — no code changes to the library.
+
+### Added
+- **Subagents pattern** documented + a runnable example. A subagent is not a
+  kernel feature: it's the run-inside-run pattern — a `@tool` whose body calls
+  `run_agent`, so the spawn is gated by the parent's policy and the child runs
+  with its own policy/tools/budget (a permission boundary). Example 33
+  (`33_subagents.py`) shows sequential and parallel (`asyncio.gather`)
+  delegation with the audit tree printed; `docs/concepts.md` gains a
+  "Subagents (run-inside-run)" entry covering order-of-execution and the
+  guardrails you own (depth cap, cancel propagation, correlation, fan-out
+  budget) and when to prefer a handoff graph instead.
+
 ## [2.6.0] — 2026-06-18
 
 The token-optimization release — two complementary ways to cut the token

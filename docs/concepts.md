@@ -118,6 +118,16 @@ class Router(Protocol):
 
 `GraphNode` (agent + tools + policy + budget + on_approval), `NodeOutcome` (node, `RunResult`, **denials** — replay-stable, transitions), `GraphResult` (final result, full path, error for max-transitions/unknown-node/superseded). `compile_graph(yaml)` / `load_graph_file(path)` build a `GraphSpec` — a compiled edge table that *is* a Router; first matching edge wins; predicates: `status`, `answer_matches`/`error_matches` (ReDoS-guarded), `denials_gt`, `steps_gt`; `done` is the reserved terminal. `max_transitions` is always enforced. Context passing is explicit via `compose_task(original_task, outcome)`. With `store=`/`run_id=`, node runs journal under derived child run_ids and each routing decision journals as a `handoff` record — resume replays both. Graph-level events: `graph.started`, `graph.handoff`, `graph.exhausted`, `graph.superseded`, `graph.finished`.
 
+## Subagents (run-inside-run)
+
+Not a kernel feature — a **subagent is a `@tool` whose body calls `run_agent`**. The parent's policy gates the spawn (give it a scope like `agent:spawn`); the child runs with its **own** policy, tools, and budget — a permission boundary the model invokes dynamically. The child's `final_answer` becomes the tool result and flows back into the parent's conversation. No new machinery; it's composition.
+
+- **Order of execution** — the parent loop is sequential (one tool call per step). *Inside* a spawn tool you choose: `await run_agent(...)` is sequential; `asyncio.gather(run_agent(...), ...)` is parallel. The kernel never parallelizes for you.
+- **Guardrails are yours** (you own the tool body): cap recursion **depth** (a child that can itself spawn will otherwise recurse), pass the parent's `CancelToken` into the child so a kill propagates to the whole subtree, derive the child `correlation_id` from the parent's to keep the audit tree reconstructable, and bound fan-out with a per-child `Budget` plus the repetition gate.
+- **vs handoff graphs** — use a **graph** (`run_graph`) for a *fixed* pipeline (triage → fix → review); use **subagents** for *dynamic*, model-decided decomposition (a planner that spawns workers). Both make the edge between agents a policy boundary.
+
+Runnable: [`examples/33_subagents.py`](../examples/33_subagents.py) — sequential + parallel, with the audit tree printed.
+
 ## Executor
 
 A callable that runs one approved action. The seam where execution isolation attaches — policy decides *whether*, the executor decides *where and how*.
