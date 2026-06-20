@@ -302,8 +302,33 @@ async def run_agent(
                 # events, while staying groupable by the run_id prefix.
                 cid = f"{run_id}#{new_correlation_id()[:8]}"
 
-        await emit("run.started", {"task": task, "principal_id": principal.id})
+        await emit(
+            "run.started",
+            {
+                "task": task,
+                "principal_id": principal.id,
+                "environment": environment,
+                # Surface the effective caps so the setting is always visible in
+                # the audit stream — operators never have to guess what bounds a run.
+                "budget": {
+                    "steps": budget.steps,
+                    "duration_seconds": budget.duration_seconds,
+                    "tokens": budget.tokens,
+                    "input_tokens": budget.input_tokens,
+                    "output_tokens": budget.output_tokens,
+                    "step_timeout_seconds": budget.step_timeout_seconds,
+                    "max_repeated_calls": budget.max_repeated_calls,
+                },
+            },
+        )
         started_emitted = True
+        if budget.is_unbounded():
+            # A deliberate Budget.unlimited() (or all-None) run — make it loud,
+            # never silent: this is the only path that can run forever.
+            await emit(
+                "run.unbounded",
+                {"detail": "no step, duration, or token cap — run can loop forever"},
+            )
 
         if store is not None and idx.last_bundle_id is not None and idx.last_bundle_id != policy.id:
             await emit(

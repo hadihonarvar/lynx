@@ -7,6 +7,20 @@ All notable changes to Lynx will be documented here. Format follows [Keep a Chan
 ### Added
 - (nothing yet)
 
+## [2.8.0] — 2026-06-19
+
+### Changed
+- **`Budget` is now safe by default.** A bare `Budget()` ships caps (`steps=50`,
+  `duration_seconds=600`) instead of being unlimited — so a forgotten budget can
+  no longer let an agent loop forever and exhaust memory. This matches Lynx's
+  fail-closed stance everywhere else (policy `on_no_match: deny`, executor no
+  route → blocked). To run with no caps, opt out explicitly and readably with
+  `Budget.unlimited()`; setting one cap leaves the others at their defaults.
+- **The effective budget is now visible in the audit stream.** `run.started`
+  carries the resolved `budget` and `environment`, and an uncapped run emits a
+  new loud `run.unbounded` event — the dangerous choice is never silent. New
+  `Budget.unlimited()` and `Budget.is_unbounded()`.
+
 ## [2.7.0] — 2026-06-19
 
 ### Added

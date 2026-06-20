@@ -1,7 +1,7 @@
 # Lynx
 
-[![PyPI](https://img.shields.io/pypi/v/lynx-agent.svg?v=2.7.0)](https://pypi.org/project/lynx-agent/)
-[![Python versions](https://img.shields.io/pypi/pyversions/lynx-agent.svg?v=2.7.0)](https://pypi.org/project/lynx-agent/)
+[![PyPI](https://img.shields.io/pypi/v/lynx-agent.svg?v=2.8.0)](https://pypi.org/project/lynx-agent/)
+[![Python versions](https://img.shields.io/pypi/pyversions/lynx-agent.svg?v=2.8.0)](https://pypi.org/project/lynx-agent/)
 [![License](https://img.shields.io/pypi/l/lynx-agent.svg)](https://github.com/hadihonarvar/lynx/blob/main/LICENSE)
 [![CI](https://github.com/hadihonarvar/lynx/actions/workflows/ci.yml/badge.svg)](https://github.com/hadihonarvar/lynx/actions/workflows/ci.yml)
 
@@ -36,7 +36,7 @@ result = await run_agent(
     environment="prod",          # policy can match on context.environment
     # principal=Principal(kind="user", id="hadi"),  # optional
     # workspace=".",                                 # optional
-    # budget=Budget(steps=50, duration_seconds=600), # default: NO caps — define to enforce
+    # budget=Budget(steps=50, duration_seconds=600), # this IS the default; Budget.unlimited() to opt out
     # correlation_id=None,                           # auto-generated if None
 )
 # result: { correlation_id, bundle_id, final_answer, error, steps_taken }

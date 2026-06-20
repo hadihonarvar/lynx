@@ -105,11 +105,16 @@ class Usage:
 class Budget:
     """Hard caps enforced by the scheduler, all checked between steps.
 
-    Every field defaults to ``None`` = **unlimited**: only the caps you set
-    are enforced; an undefined cap is no restriction at all. ``Budget()``
-    constrains nothing — which also means an agent loop that never returns
-    a ``FinalAnswer`` runs forever. In production, set at least ``steps``
-    or ``duration_seconds``.
+    **Safe by default.** ``Budget()`` ships sensible caps (``steps`` and
+    ``duration_seconds``) so an agent that never returns a ``FinalAnswer``
+    cannot loop forever and exhaust memory — the same fail-closed stance as the
+    policy (``on_no_match: deny``) and the executor (no route → blocked). A cap
+    set to ``None`` is unlimited; an individual field you set overrides its
+    default. To run with **no** caps at all, say so out loud:
+    ``Budget.unlimited()`` — a deliberate, readable opt-out, never a silent one.
+    The scheduler also stamps the effective budget onto the ``run.started``
+    audit event and emits ``run.unbounded`` when a run truly has no caps, so the
+    setting is always visible.
 
     ``duration_seconds`` uses a monotonic clock so wall-clock jumps do not
     exhaust it; a single hung tool call is not interrupted (use a tool-level
@@ -128,8 +133,10 @@ class Budget:
     (``inline_executor(timeout_seconds=...)`` / ``subprocess_executor``).
     """
 
-    duration_seconds: int | None = None
-    steps: int | None = None
+    # Default caps: bound every run unless explicitly opted out. ~10 minutes /
+    # 50 steps is generous for most tasks and a hard ceiling against runaways.
+    duration_seconds: int | None = 600
+    steps: int | None = 50
     input_tokens: int | None = None
     output_tokens: int | None = None
     tokens: int | None = None  # combined input + output
@@ -139,6 +146,19 @@ class Budget:
     # None = no limit. Identical calls are keyed by tool + canonical args, so a
     # genuinely different argument resets the streak.
     max_repeated_calls: int | None = None
+
+    @classmethod
+    def unlimited(cls) -> Budget:
+        """A budget with **no** caps — the explicit, readable opt-out.
+
+        Use only when you genuinely want an unbounded run (and own the risk of
+        an agent looping forever). The scheduler flags it with ``run.unbounded``.
+        """
+        return cls(duration_seconds=None, steps=None)
+
+    def is_unbounded(self) -> bool:
+        """True when nothing bounds the run length: no step, duration, or token cap."""
+        return self.steps is None and self.duration_seconds is None and self.tokens is None
 
 
 @dataclass(frozen=True, slots=True)

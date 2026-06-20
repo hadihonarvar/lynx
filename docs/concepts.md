@@ -224,7 +224,8 @@ No hash chain. No content addressing. Your sink decides retention.
 
 | Kind | When emitted |
 |------|-------------|
-| `run.started` | At the start of `run_agent` |
+| `run.started` | At the start of `run_agent` — body carries the effective `budget` and `environment` |
+| `run.unbounded` | The run has no step/duration/token cap (`Budget.unlimited()`) — a loud signal that it can loop forever |
 | `step.proposed` | Agent returned a `ToolCall` |
 | `policy.evaluated` | PDP returned a Decision |
 | `action.started` | Real tool about to run (allow / transform / approval-granted) |
@@ -260,18 +261,21 @@ Principal(kind="user" | "service" | "agent", id="...", name="...")
 
 ## Budget
 
-Frozen. Hard caps the kernel enforces between steps. **Every field defaults to `None` = unlimited** — only the caps you define are enforced; what you don't define is no restriction at all:
+Frozen. Hard caps the kernel enforces between steps. **Safe by default:** a bare `Budget()` bounds the run (`steps` + `duration_seconds`) so an agent that never finishes can't loop forever — the same fail-closed stance as the policy (`on_no_match: deny`) and the executor (no route → blocked). A field set to `None` is unlimited; setting one cap leaves the others at their defaults. To run with **no** caps, opt out explicitly with `Budget.unlimited()`:
 
 ```python
 @dataclass(frozen=True, slots=True)
 class Budget:
-    duration_seconds: int | None = None
-    steps: int | None = 50
-    input_tokens: int | None = None    # enforced against adapter-reported Usage
+    duration_seconds: int | None = 600         # safe default
+    steps: int | None = 50                     # safe default
+    input_tokens: int | None = None            # enforced against adapter-reported Usage
     output_tokens: int | None = None
-    tokens: int | None = None          # combined input + output
-    step_timeout_seconds: float | None = None   # per agent.step() model call
-    max_repeated_calls: int | None = None       # trip the same-tool-same-args loop
+    tokens: int | None = None                  # combined input + output
+    step_timeout_seconds: float | None = None  # per agent.step() model call
+    max_repeated_calls: int | None = None      # trip the same-tool-same-args loop
+
+Budget.unlimited()      # all caps None — the explicit, readable opt-out
+Budget().is_unbounded() # False; Budget.unlimited().is_unbounded() is True
 ```
 
 The scheduler uses a monotonic clock for `duration_seconds`, so wall-clock NTP jumps cannot exhaust (or extend) the budget. Checks happen between steps; a single hung tool call is not interrupted by `duration_seconds` — bound tools at the executor seam (`inline_executor(timeout_seconds=…)` cancels cooperative tools; `subprocess_executor` kills even tight CPU loops). Token caps stop the *next* model call — the step that crossed the cap already happened — and never trigger for agents that report no usage. `step_timeout_seconds` is the exception to "between steps": it wraps each `agent.step()` call itself, so a hung provider connection fails the run (`error="agent.step timed out after Ns"`) instead of hanging it forever — and since nothing journals until the step returns, a timed-out step leaves no record and resume simply re-asks the model.
@@ -292,7 +296,7 @@ class Usage:
 
 The scheduler accumulates these into `RunResult.usage` (lifetime totals — replayed steps included), emits a `step.usage` event per live metered step, and enforces `Budget` token caps. Field names align with OpenTelemetry GenAI conventions (`gen_ai.usage.input_tokens` / `output_tokens`). The kernel never converts tokens to money — that's your sink, your rates.
 
-`run_agent`'s default is `Budget()` — **no caps at all**. An unbudgeted agent that never returns a `FinalAnswer` runs forever; in production set at least `steps` or `duration_seconds`.
+`run_agent`'s default is `Budget()` — **safe caps** (`steps=50`, `duration_seconds=600`), so a forgotten budget can't run forever. The effective caps are stamped onto the `run.started` audit event, and choosing `Budget.unlimited()` emits a loud `run.unbounded` — the dangerous choice is always visible, never silent.
 
 > The `usd` and `tokens` fields were removed: neither was enforced by the kernel. Token/spend accounting belongs in a sink (or an adapter wrapping the LLM call), not in the policy boundary.
 

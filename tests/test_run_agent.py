@@ -7,6 +7,7 @@ import json
 from typing import Any
 
 from lynx import (
+    Budget,
     FinalAnswer,
     Message,
     ToolCall,
@@ -73,6 +74,46 @@ async def test_run_agent_returns_minimal_result() -> None:
     assert result.steps_taken == 1
     assert result.correlation_id  # uuid
     assert result.bundle_id == policy.id
+
+
+async def test_run_started_surfaces_effective_budget() -> None:
+    policy = compile_policy("version: 1\ndefaults: { on_no_match: allow }\nrules: []")
+    seen: list[Any] = []
+
+    async def collect(ev):
+        seen.append(ev)
+
+    agent = _ScriptedAgent(FinalAnswer(text="done"))
+    await run_agent(
+        agent, task="t", tools=ToolSet.from_functions(echo), policy=policy,
+        sinks=(callback_sink(collect),), on_approval=auto_deny("x"),
+    )
+    started = next(e for e in seen if e.kind == "run.started")
+    # The effective caps are visible on the audit stream by default.
+    assert started.body["budget"]["steps"] == 50
+    assert started.body["budget"]["duration_seconds"] == 600
+    assert started.body["environment"] == "dev"
+    # A bounded run does NOT emit the loud unbounded warning.
+    assert not any(e.kind == "run.unbounded" for e in seen)
+
+
+async def test_unlimited_budget_emits_run_unbounded() -> None:
+    policy = compile_policy("version: 1\ndefaults: { on_no_match: allow }\nrules: []")
+    seen: list[Any] = []
+
+    async def collect(ev):
+        seen.append(ev)
+
+    agent = _ScriptedAgent(FinalAnswer(text="done"))
+    await run_agent(
+        agent, task="t", tools=ToolSet.from_functions(echo), policy=policy,
+        budget=Budget.unlimited(), sinks=(callback_sink(collect),),
+        on_approval=auto_deny("x"),
+    )
+    # Opting out of caps is loud, never silent.
+    assert any(e.kind == "run.unbounded" for e in seen)
+    started = next(e for e in seen if e.kind == "run.started")
+    assert started.body["budget"]["steps"] is None
 
 
 async def test_run_agent_blocks_dangerous_with_deny_policy() -> None:
@@ -217,8 +258,6 @@ async def test_run_agent_budget_steps() -> None:
     class NeverFinishes:
         async def step(self, conv):
             return ToolCall(tool="echo", args={"msg": "x"}, call_id="c")
-
-    from lynx import Budget
 
     result = await run_agent(
         NeverFinishes(),

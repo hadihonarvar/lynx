@@ -21,8 +21,28 @@ def test_principal_is_frozen() -> None:
         p.kind = "service"  # type: ignore[misc]
 
 
-def test_budget_default_steps() -> None:
-    assert Budget().steps is None  # undefined = unlimited; only set caps enforce
+def test_budget_is_safe_by_default() -> None:
+    # Safe-by-default: a bare Budget() bounds the run (no silent unlimited).
+    b = Budget()
+    assert b.steps == 50
+    assert b.duration_seconds == 600
+    assert not b.is_unbounded()
+
+
+def test_budget_unlimited_is_the_explicit_opt_out() -> None:
+    u = Budget.unlimited()
+    assert u.steps is None
+    assert u.duration_seconds is None
+    assert u.tokens is None
+    assert u.is_unbounded()
+
+
+def test_budget_partial_override_keeps_other_default() -> None:
+    # Setting one cap doesn't silently drop the others.
+    b = Budget(steps=200)
+    assert b.steps == 200
+    assert b.duration_seconds == 600  # still bounded
+    assert not b.is_unbounded()
 
 
 def test_verdict_string_form() -> None:
