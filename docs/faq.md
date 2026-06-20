@@ -13,9 +13,9 @@ Wherever you point the sinks. Lynx holds nothing. Common choices:
 
 See the [integration cookbook](integration-cookbook.md) for ready-to-paste recipes covering SQLite, PostgreSQL, OpenTelemetry, Splunk HEC, generic HTTP POST, Slack approvals, and durability `RunStore` backends (Redis / Postgres / files — or wrapping `run_agent` in Temporal).
 
-### Can I get the v1 hash-chained audit chain?
+### Can I get a hash-chained audit chain?
 
-Not in current Lynx. If you need it: `pip install "lynx-agent<2.0"`. We keep v1.0.x security-patched.
+Not yet — a tamper-evident, hash-chained (optionally signed) audit sink is on the roadmap. Today, wire `jsonl_sink` or your own sink to persist the event stream.
 
 ### How do I do cross-process approval (Slack, web UI)?
 

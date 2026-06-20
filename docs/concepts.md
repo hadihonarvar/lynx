@@ -142,6 +142,22 @@ Not a kernel feature — a **subagent is a `@tool` whose body calls `run_agent`*
 
 Runnable: [`examples/33_subagents.py`](../examples/33_subagents.py) — sequential + parallel, with the audit tree printed.
 
+## MCP proxy (optional)
+
+A **proxy** interposes Lynx on a transport an existing client already speaks — the inverse of an adapter (which pulls a backend *into* `run_agent`). `lynx.proxy.mcp_proxy` is a governing [MCP](https://modelcontextprotocol.io) server: an MCP client (Claude Desktop/Code, Cursor) points at Lynx instead of the real server, and every `call_tool` is routed through the *same* `evaluate → mediate` path as `run_agent` — `allow / deny / dry_run / approve_required / transform` — before it reaches upstream, emitting the same [event kinds](#event-kinds) to your sinks. **Zero code change** on client or server.
+
+- **Transport-free core** — `GovernedProxy` / `govern_call` take a `PolicyBundle`, a `ToolSet`, and a callable that reaches upstream; unit-testable with no MCP server. `build_toolset` turns upstream tool names into `ToolDef`s (the only path to upstream) and attaches a pure preview shadow so `dry_run` works out of the box.
+- **Conservative by default** — `ToolClassifier` marks every upstream tool `reversible=False`, scope `("mcp:tool", "mcp:<name>")`, so operator policy must *opt tools in*; the per-tool scope tag lets a rule target one tool without a predicate.
+- **Transport** — `serve_mcp_proxy(upstream, policy=…, sinks=…)` runs the stdio server (downstream) + client (upstream), re-exporting upstream tool schemas verbatim. Requires `pip install lynx-agent[mcp]`.
+
+Runnable: [`examples/34_mcp_proxy.py`](../examples/34_mcp_proxy.py) — reads allowed, writes previewed, deletes blocked, with the audit stream printed. [`examples/36_fastmcp_governed.py`](../examples/36_fastmcp_governed.py) does the same in front of a server built with FastMCP (the decorator API bundled in the `mcp` SDK).
+
+## OpenAI-compatible providers
+
+Grok (xAI), Mistral, DeepSeek, Groq, OpenRouter, Together, Fireworks, Perplexity and Ollama all speak the OpenAI Chat Completions wire format, so Lynx reaches them through the one `OpenAIAgent` rather than a bespoke adapter each. `lynx.adapters.openai_compat` is the convenience layer: a `PROVIDERS` registry (stable `base_url` + env-var name per provider — **no model defaults**, since those drift; you always pass `model=`) and `openai_compatible_agent(provider, *, tools, model, …)`, which resolves credentials and returns an `OpenAIAgent` that owns its client. `OpenAIAgent(base_url=…, api_key=…)` is the lower-level door for any endpoint not in the registry. The Lynx point: the **`PolicyBundle` is provider-agnostic** — the same boundary gates the same tools no matter which model proposes the calls. (Note: `grok` is xAI's `api.x.ai`; `groq` is Groq's `api.groq.com` — distinct.)
+
+Runnable: [`examples/35_multi_provider.py`](../examples/35_multi_provider.py) — lists the registry and governs one provider with a shared policy.
+
 ## Executor
 
 A callable that runs one approved action. The seam where execution isolation attaches — policy decides *whether*, the executor decides *where and how*.
@@ -278,7 +294,7 @@ The scheduler accumulates these into `RunResult.usage` (lifetime totals — repl
 
 `run_agent`'s default is `Budget()` — **no caps at all**. An unbudgeted agent that never returns a `FinalAnswer` runs forever; in production set at least `steps` or `duration_seconds`.
 
-> v2.0 removed the `usd` and `tokens` fields that v1 carried: neither was enforced by the kernel. Token/spend accounting belongs in a sink (or an adapter wrapping the LLM call), not in the policy boundary.
+> The `usd` and `tokens` fields were removed: neither was enforced by the kernel. Token/spend accounting belongs in a sink (or an adapter wrapping the LLM call), not in the policy boundary.
 
 ## ExecutionContext
 

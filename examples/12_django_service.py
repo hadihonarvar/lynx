@@ -90,6 +90,10 @@ class ScriptedRefund:
 
 class LynxAppConfig(AppConfig):
     name = "examples.12_django_service"
+    # Django derives the app label from the last dotted segment, which here
+    # starts with a digit ("12_django_service") — invalid since Django 6.0.
+    # Pin an explicit, identifier-safe label.
+    label = "lynx_django_demo"
     tools: ToolSet
     policy: Any
 

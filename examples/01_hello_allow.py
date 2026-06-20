@@ -11,7 +11,7 @@ SCENARIO:
 WHAT THIS EXAMPLE SHOWS:
     - The smallest @tool you can write
     - The smallest YAML policy ("allow everything")
-    - The new v2 entry point: `run_agent(...)` — no Runtime class
+    - The entry point: `run_agent(...)` — no Runtime class
     - Stdout sink: events stream to terminal as they happen
     - Nothing persisted on disk
 

@@ -1,7 +1,7 @@
 # Lynx
 
-[![PyPI](https://img.shields.io/pypi/v/lynx-agent.svg?v=2.6.4)](https://pypi.org/project/lynx-agent/)
-[![Python versions](https://img.shields.io/pypi/pyversions/lynx-agent.svg?v=2.6.4)](https://pypi.org/project/lynx-agent/)
+[![PyPI](https://img.shields.io/pypi/v/lynx-agent.svg?v=2.7.0)](https://pypi.org/project/lynx-agent/)
+[![Python versions](https://img.shields.io/pypi/pyversions/lynx-agent.svg?v=2.7.0)](https://pypi.org/project/lynx-agent/)
 [![License](https://img.shields.io/pypi/l/lynx-agent.svg)](https://github.com/hadihonarvar/lynx/blob/main/LICENSE)
 [![CI](https://github.com/hadihonarvar/lynx/actions/workflows/ci.yml/badge.svg)](https://github.com/hadihonarvar/lynx/actions/workflows/ci.yml)
 
@@ -56,6 +56,7 @@ result = await run_agent(
 - **Token optimization (the compressor seam)** *(opt-in)*. Metering measures spend; this reduces it. Pass `compressor=` and every fresh tool result is shrunk *before* it enters the conversation, the journal, and any replay — so a 40 KB log dumped once isn't re-sent in full on every later step. Lynx ships pure-Python reference compressors (`truncate_compressor`, `dedup_compressor`, `compose_compressors`, `route_compressor` via `@tool(compress=…)`, `external_filter_compressor`) and **fails open** — a broken compressor never drops a real output. Lynx is *not* a token optimizer; it owns the seam where yours plugs in. Separately, the Claude adapter now enables Anthropic **prompt caching** (`cache_prompt=True`) so a long loop re-reads prior turns from cache instead of re-billing them. *(RTK — github.com/rtk-ai/rtk — has no stdin filter and is wired at the tool level: your shell tool runs `rtk <cmd>`.)*
 - **Pluggable execution (the executor seam).** Every approved action flows through one `Executor` — in-process by default, a subprocess with rlimits, or *your* Docker/gVisor/E2B wrapper (one async callable). Route per-tool via `@tool(isolation="container")` + `route_executor({...})`, failing closed when a requested isolation has no route. Lynx defines the seam; the security boundary is whatever you plug in.
 - **Handoff graphs** *(optional)*. Sequential multi-agent workflows where **the edge is a permission boundary**: each node is one `run_agent` call with its own policy/tools/budget, and edges route on outcomes — including **denial counts**. Bounded by construction (`max_transitions`), explicit context passing, YAML-declarable, durable via the same `RunStore`. Just sugar over a loop of `run_agent` calls — skip it and write the loop yourself anytime.
+- **MCP proxy** *(optional)*. Put Lynx *in front of* any MCP server: the client (Claude Desktop/Code, Cursor, …) points at Lynx instead of the server, and every `call_tool` flows through the same `evaluate → mediate` path — `allow / deny / dry_run / approve_required / transform` — with an audit stream, **zero code change** on client or server. `serve_mcp_proxy(upstream, policy=…, sinks=…)` wires the stdio transport; `GovernedProxy` / `govern_call` are the transport-free, unit-testable core. See example 34. *(`pip install lynx-agent[mcp]`.)*
 - **Operability controls.** A kill-switch (`cancel=CancelToken()`) checked at every step boundary and before each tool runs — a cancelled run stops after at most one more action. Plus a repetition gate (`Budget(max_repeated_calls=)`) for same-tool-same-args loops, and per-step / per-tool timeouts.
 
 ## What Lynx does NOT do
@@ -71,10 +72,18 @@ result = await run_agent(
 ```bash
 pip install lynx-agent                    # core (3 deps)
 pip install lynx-agent[anthropic]         # Claude adapter
-pip install lynx-agent[openai]            # GPT adapter
+pip install lynx-agent[openai]            # GPT + any OpenAI-compatible provider
 pip install lynx-agent[langgraph]
 pip install lynx-agent[crewai]
 pip install lynx-agent[mcp]
+```
+
+The `[openai]` adapter also targets any **OpenAI-compatible** provider — Grok (xAI), Mistral, DeepSeek, Groq, OpenRouter, Together, Fireworks, Perplexity, Ollama — via one registry, and the *same policy* governs every one:
+
+```python
+from lynx.adapters.openai_compat import openai_compatible_agent
+agent = openai_compatible_agent("deepseek", tools=tools, model="deepseek-chat")
+# swap "deepseek" → "grok" / "mistral" / "groq" / … — run_agent(...) is unchanged
 ```
 
 ## Quickstart
@@ -458,9 +467,9 @@ records.jsonl` (for file-backed stores).
 ## Execution isolation — the executor seam
 
 Policy decides *whether* an action runs; the executor decides *where and
-how*. By default approved tools run in-process — identical to every prior
-release. Pass an `Executor` and all real execution (allow / transform /
-approval-granted) flows through it instead:
+how*. By default approved tools run in-process. Pass an `Executor` and all
+real execution (allow / transform / approval-granted) flows through it
+instead:
 
 ```python
 from lynx import inline_executor, route_executor, subprocess_executor
@@ -598,6 +607,19 @@ ToolSet, or with an agent that isn't a pure function of the conversation
 | 10 | [`10_devops_assistant.py`](examples/10_devops_assistant.py) | All five verdicts (one policy, run in staging + prod) |
 | 11 | [`11_flask_service.py`](examples/11_flask_service.py) | Flask integration |
 | 12 | [`12_django_service.py`](examples/12_django_service.py) | Django integration |
+| 13 | [`13_python_rules.py`](examples/13_python_rules.py) | Python rules + `<rule_error:…>` diagnostics |
+| 17 | [`17_shadow_helpers.py`](examples/17_shadow_helpers.py) | Built-in fs/http/shell/sql shadows |
+| 18 | [`18_sandboxed_tool.py`](examples/18_sandboxed_tool.py) | `subprocess_executor` resource caps |
+| 24 | [`24_durable_resume.py`](examples/24_durable_resume.py) | Crash → resume, never double-charge |
+| 26 | [`26_executor_seam.py`](examples/26_executor_seam.py) | Bring-your-own sandbox (`route_executor`) |
+| 27 | [`27_handoff_graph.py`](examples/27_handoff_graph.py) | Handoff graph — the edge is a policy boundary |
+| 32 | [`32_token_optimization.py`](examples/32_token_optimization.py) | Compressor seam |
+| 33 | [`33_subagents.py`](examples/33_subagents.py) | A tool that runs an agent |
+| 34 | [`34_mcp_proxy.py`](examples/34_mcp_proxy.py) | Govern any MCP server, zero code change |
+| 35 | [`35_multi_provider.py`](examples/35_multi_provider.py) | One policy, any model provider |
+| 36 | [`36_fastmcp_governed.py`](examples/36_fastmcp_governed.py) | Build with FastMCP, govern with Lynx |
+
+All 36 with one-line descriptions: [`examples/README.md`](examples/README.md).
 
 ## CLI — six commands
 
@@ -610,35 +632,12 @@ lynx policy lint                 # validates a YAML
 lynx policy bundle-id            # content-addressed ID
 ```
 
-## Migrating from v1.x
-
-v1's `Runtime`, `runtime.run/resume/approve/deny`, SQLite store, audit chain, and approval broker are all gone. Replace:
-
-| v1.x | Lynx today |
-|----|-----|
-| `runtime.run(agent, task=...)` | `run_agent(agent, task, tools=..., policy=..., sinks=..., on_approval=...)` |
-| `runtime.resume(run_id)` | Re-call `run_agent` with the same `store=` + `run_id=` — completed steps replay from your journal |
-| `runtime.approve(approval_id)` | Doesn't exist — handler returns `ApprovalDecision` synchronously |
-| `runtime.audit_chain(run_id)` | Doesn't exist — wire `jsonl_sink` or your own sink |
-| `get_registry()` | Doesn't exist — `ToolSet.from_functions(*decorated_fns)` |
-| `enable_otel()` | Will land as `otel_sink(tracer)` in v2.1 |
-| `lynx ps / trace / audit / resume / approvals` | All gone — your sink owns the story |
-
-If you need any of those primitives, **pin v1.0.x:**
-
-```bash
-pip install "lynx-agent<2.0"
-```
-
-v1 will keep getting security fixes per the SECURITY.md policy.
-
 ## Status
 
-**v2.0 — public API committed.** SemVer from here. Production-ready for the documented scope.
+**Public API committed; SemVer.** Production-ready for the documented scope. The kernel — `run_agent`, the five verdicts, the policy language, the sink/executor/compressor/durability seams — is stable; new capabilities land as additive seams and adapters (recent: the MCP proxy, OpenAI-compatible providers, FastMCP), never as breaking changes to that core.
 
 ## Design
 
-- [`docs/v2-rfc.md`](docs/v2-rfc.md) — the original v2-rewrite RFC (historical design record)
 - [`docs/concepts.md`](docs/concepts.md) — vocabulary
 - [`docs/what-lynx-is-and-isnt.md`](docs/what-lynx-is-and-isnt.md) — what Lynx owns vs. what it composes with (mem0/Zep, Langfuse, LiteLLM, MCP gateways, Temporal)
 - [`docs/cookbook.md`](docs/cookbook.md) — policy patterns (YAML)

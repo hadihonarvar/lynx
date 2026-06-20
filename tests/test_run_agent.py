@@ -1,4 +1,4 @@
-"""Integration tests for ``run_agent`` — the v2 public entry point."""
+"""Integration tests for ``run_agent`` — the public entry point."""
 
 from __future__ import annotations
 

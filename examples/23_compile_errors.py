@@ -5,8 +5,8 @@ EXAMPLE 23 — "Catching policy errors at compile time" (ADVANCED)
 
 SCENARIO:
     Lynx tries hard to fail loudly at compile time rather than silently
-    at runtime. Every mistake below would silently never match in v1 (or
-    earlier v2 dev builds). All of these now raise `PolicyCompileError`
+    at runtime. Every mistake below would otherwise silently never match.
+    All of these raise `PolicyCompileError`
     before the bundle is built — surface them in CI with `lynx policy
     lint` and you cannot deploy a never-matching rule.
 

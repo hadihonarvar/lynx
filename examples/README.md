@@ -199,6 +199,9 @@ result = await run_graph(nodes, task, router=graph,        # 7: teamwork
 | 31 | [`31_kill_switch.py`](31_kill_switch.py) | `CancelToken` + `Budget(max_repeated_calls)` | "Stop a runaway mid-run after one more action; break a same-tool-same-args loop — clean structured stops, no crash." |
 | 32 | [`32_token_optimization.py`](32_token_optimization.py) | `compressor=` + `route_compressor` + `@tool(compress=)` | "Trim a tool's output once at the boundary and it's not re-sent in full every step — dedup/truncate per tool, one tool opting out, savings on the audit stream." |
 | 33 | [`33_subagents.py`](33_subagents.py) | subagent-as-tool (`run_agent` inside a `@tool`) | "A lead agent delegates to workers by calling a tool that runs an agent — spawn gated by the lead's policy, each worker its own boundary, sequential and parallel (`asyncio.gather`), with the audit tree." |
+| 34 | [`34_mcp_proxy.py`](34_mcp_proxy.py) | MCP proxy (`lynx.proxy.mcp_proxy`) | "Sit Lynx in front of any MCP server — every `call_tool` flows through `evaluate`→`mediate` (allow/deny/dry_run) with an audit stream, zero code change on client or server. Reads allowed, writes previewed, deletes blocked." |
+| 35 | [`35_multi_provider.py`](35_multi_provider.py) | OpenAI-compatible providers (`lynx.adapters.openai_compat`) | "One policy, any model: Grok / Mistral / DeepSeek / Groq / OpenRouter / Ollama via `openai_compatible_agent(provider, ...)` — the governance boundary is identical no matter which model proposes the calls." |
+| 36 | [`36_fastmcp_governed.py`](36_fastmcp_governed.py) | FastMCP server + Lynx proxy | "Build an MCP server the popular way (FastMCP `@mcp.tool()`), then govern it with Lynx — reads allowed, writes previewed, deletes denied, the denied delete never touching the real filesystem. Dual-mode: `--serve` is the server, no-args is the governed demo." |
 
 ## How to run any of them
 
@@ -264,6 +267,15 @@ python examples/21_langgraph_demo.py
 # Example 22 — CrewAI adapter
 pip install lynx-agent[crewai]
 python examples/22_crewai_demo.py
+
+# Example 34 — MCP proxy (core demo runs standalone; live proxy needs a server)
+python examples/34_mcp_proxy.py
+pip install lynx-agent[mcp]   # then uncomment serve_mcp_proxy(...) for the live proxy
+
+# Example 35 — OpenAI-compatible providers (lists registry; live call needs a key)
+pip install lynx-agent[openai]
+python examples/35_multi_provider.py
+DEEPSEEK_API_KEY=sk-... python examples/35_multi_provider.py deepseek deepseek-chat
 ```
 
 ## After running anything
@@ -294,6 +306,8 @@ There is no `lynx ps` / `lynx audit` — Lynx itself holds no past runs. (`lynx 
 | Budget exhaustion | `RunResult.error` with structured budget message, not a crash | 19 |
 | Unknown tool handling | `action.failed` + `[error]` injected to conversation; run continues | 19 |
 | MCP integration | `mcp_tools(command)` async context manager | 20 |
+| MCP proxy (govern any MCP server) | `serve_mcp_proxy(...)` / `GovernedProxy` — policy + audit in front of an upstream server | 34 |
+| OpenAI-compatible providers | `openai_compatible_agent(provider, ...)` — Grok / Mistral / DeepSeek / Groq / OpenRouter / Ollama, one policy for all | 35 |
 | LangGraph integration | `LangGraphAgent(compiled_graph=...)` | 21 |
 | CrewAI integration | `CrewAIAgent(crew=...)` — single-shot tradeoff | 22 |
 | `PolicyCompileError` | Every malformed policy fails at compile time, not at runtime | 23 |
@@ -315,7 +329,6 @@ After running through the examples:
 
 | You want to… | Read |
 |--------------|------|
-| Understand the design | [`docs/v2-rfc.md`](../docs/v2-rfc.md) |
 | Understand the vocabulary | [`docs/concepts.md`](../docs/concepts.md) |
 | Know what Lynx is / isn't (scope, what it composes with) | [`docs/what-lynx-is-and-isnt.md`](../docs/what-lynx-is-and-isnt.md) |
 | Build your own policy from scratch | [`docs/02-policy-language.md`](../docs/02-policy-language.md) |

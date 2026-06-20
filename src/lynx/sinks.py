@@ -1,4 +1,4 @@
-"""Sinks — the streaming replacement for v1's SQLite audit chain.
+"""Sinks — the streaming home for audit events.
 
 A Sink is anything callable that takes an ``AuditEvent`` and returns an
 awaitable ``None``. Lynx never opens a file or holds an event buffer — the
@@ -130,8 +130,8 @@ def callback_sink(fn: Callable[[AuditEvent], Awaitable[None]]) -> Sink:
 
 
 # Note on optional sinks: otel_sink, prometheus_sink, http_sink, kafka_sink
-# are deferred to v2.1 — they each depend on optional packages and can be
-# added without breaking the v2.0 API.
+# are deferred — they each depend on optional packages and can be
+# added without breaking the public API.
 
 # Re-export to silence linters about unused imports above when applicable.
 _ = asdict

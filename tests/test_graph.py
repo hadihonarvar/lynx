@@ -194,7 +194,7 @@ async def test_yaml_graph_review_loop() -> None:
     spec = compile_graph(GRAPH_YAML)
     assert spec.start == "triage"
     triage = Scripted(FinalAnswer(text="needs fix"))
-    fixer = Scripted(FinalAnswer(text="patched v1"), FinalAnswer(text="patched v2"))
+    fixer = Scripted(FinalAnswer(text="patched A"), FinalAnswer(text="patched B"))
     reviewer = Scripted(FinalAnswer(text="rejected: style"), FinalAnswer(text="approved!"))
 
     result = await run_graph(

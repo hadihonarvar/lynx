@@ -354,7 +354,7 @@ def test_bundle_id_changes_when_rule_body_changes() -> None:
         "    decision: deny\n"  # different verdict
         "    reason: no\n"
     )
-    assert a.id != b.id  # the v1 hash collided here
+    assert a.id != b.id  # a naive hash collided here
 
 
 def test_bundle_id_stable_across_compiles() -> None:
@@ -368,7 +368,7 @@ def test_bundle_id_stable_across_compiles() -> None:
 
 
 def test_python_rule_loses_to_higher_priority_yaml_rule() -> None:
-    """v1 walked python rules to exhaustion first; v2 interleaves by priority."""
+    """Python rules interleave with YAML by priority, not walked to exhaustion first."""
 
     def py_allow(req: ActionRequest, ctx: ExecutionContext) -> Decision | None:
         return allow(reason="python says yes")

@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-Lynx follows SemVer from v1.0 onwards. We provide security fixes for the **latest two minor releases** within the current major version. Major-version bumps include a documented overlap so users can upgrade safely.
+Lynx follows SemVer. We provide security fixes for the **latest two minor releases**. Major-version bumps include a documented overlap so users can upgrade safely.
 
 ## Reporting a vulnerability
 
@@ -47,7 +47,7 @@ Out of scope:
 - Vulnerabilities in third-party tools you wrap with `@tool` (those are your dependency's problem)
 - Misconfigured policies that allow dangerous actions (this is the operator's responsibility)
 - Issues in the optional adapters (`lynx/adapters/*`) that depend on bugs in the wrapped SDK
-- Findings against EOL versions (v1.0.x receives security backports for the latest minor; 2.x is the active branch)
+- Findings against end-of-life versions (only the latest minor release line receives security backports)
 
 ## Threat model
 

@@ -7,6 +7,40 @@ All notable changes to Lynx will be documented here. Format follows [Keep a Chan
 ### Added
 - (nothing yet)
 
+## [2.7.0] — 2026-06-19
+
+### Added
+- **MCP proxy** (`lynx.proxy.mcp_proxy`): put Lynx *in front of* any MCP server
+  so every `call_tool` is policy-evaluated and audited before it reaches
+  upstream — `allow / deny / dry_run / approve_required / transform`, zero code
+  change on client or server. `serve_mcp_proxy(upstream, policy=…, sinks=…)`
+  wires the stdio server/client transport; `GovernedProxy` / `govern_call` /
+  `build_toolset` / `ToolClassifier` are the transport-free, unit-testable core
+  (faithful to the scheduler's `evaluate → mediate` path). New example
+  `34_mcp_proxy.py`; unit tests plus a live end-to-end test against a real MCP
+  server (a policy-denied delete never reaches the filesystem). See
+  `docs/roadmap.md` (Phase 1).
+- **OpenAI-compatible providers** (`lynx.adapters.openai_compat`): reach Grok
+  (xAI), Mistral, DeepSeek, Groq, OpenRouter, Together, Fireworks, Perplexity
+  and Ollama through the existing `OpenAIAgent` — one `PROVIDERS` registry
+  (stable `base_url` + env key; no volatile model defaults) plus
+  `openai_compatible_agent(provider, *, tools, model, …)`. `OpenAIAgent` gains
+  `base_url` / `api_key` so it can target any OpenAI-compatible endpoint and
+  still own (auto-close) the client it builds. The `PolicyBundle` is
+  provider-agnostic — the same boundary governs every model. New example
+  `35_multi_provider.py`; tests in `test_openai_compat.py`.
+- **FastMCP example** (`36_fastmcp_governed.py`): build an MCP server the popular
+  way (FastMCP `@mcp.tool()`, bundled in the `mcp` SDK), then govern it with the
+  Lynx proxy — reads allowed, writes previewed, deletes denied, the denied
+  delete never reaching the real filesystem. Live test in `test_fastmcp_proxy.py`.
+
+### Changed
+- Docs: removed legacy version-generation framing throughout (the old migration
+  section and rewrite positioning) — Lynx is documented as one continuously
+  built product. Deleted the founding RFC doc. Refreshed the README examples
+  table (now through example 36) and fixed examples 09 (FastAPI) and 12
+  (Django 6 app-label).
+
 ## [2.6.4] — 2026-06-18
 
 Docs patch — no library or behavior change.
@@ -116,7 +150,7 @@ existing seams. Zero new dependencies.
 Packaging/docs patch — no code changes from 2.4.0.
 
 ### Fixed
-- The v2.4.0 sdist shipped its CHANGELOG with the release's entries still under `[Unreleased]` (the release tooling's sectioning step failed but the tag raced ahead). This release ships the correctly sectioned CHANGELOG.
+- The 2.4.0 sdist shipped its CHANGELOG with the release's entries still under `[Unreleased]` (the release tooling's sectioning step failed but the tag raced ahead). This release ships the correctly sectioned CHANGELOG.
 - Added a release-hygiene test: CI fails if `__version__` has no matching `## [X.Y.Z]` CHANGELOG section, so this class of mistake cannot recur silently.
 
 ## [2.4.0] — 2026-06-12
@@ -144,7 +178,7 @@ dependencies.
 - Example 27 expanded: a plain-function `Router` (Python first), `denials_gt` escalation with a per-node `Budget`, and whole-workflow durable resume (zero model calls on re-run).
 - Example 24 gains Act 7: a JSONL file-backed `RunStore` built on `step_record_to_json` (the format `lynx trace <file>` reads) and the `run.bundle_changed` warning in action.
 - Examples 28-30: the full-stack capstone (every pillar composed in one refund pipeline), memory gating through policy (the OWASP ASI06 recipe — poisoning denied, recalls tenant-scoped via TRANSFORM, deletions previewed + approved; all five verdicts on one surface), and a FinOps attribution sink (per-customer x per-model chargeback joining `run.started` with `step.usage`).
-- Example 18 modernized to the v2.3 executor seam: `executor=subprocess_executor(...)` bounds every approved action with zero sandbox code in the tools (the manual `run_in_subprocess` API remains documented as the underlying mechanism).
+- Example 18 modernized to the 2.3.0 executor seam: `executor=subprocess_executor(...)` bounds every approved action with zero sandbox code in the tools (the manual `run_in_subprocess` API remains documented as the underlying mechanism).
 
 ## [2.3.0] — 2026-06-11
 
@@ -163,7 +197,7 @@ the kernel. Zero new dependencies, zero shipped sandboxes, zero price tables.
 - Example 25 (`25_token_budget.py`): metering, a cost sink with user-supplied rates, and a token cap stopping a runaway loop.
 
 ### Changed
-- `Budget.tokens` returns (it was removed in v2.0 as unenforced) — this time enforced against adapter-reported counts. `Budget.usd` stays gone permanently.
+- `Budget.tokens` returns (it was removed in 2.0.0 as unenforced) — this time enforced against adapter-reported counts. `Budget.usd` stays gone permanently.
 
 ## [2.2.0] — 2026-06-11
 
@@ -231,7 +265,7 @@ so every public feature has a runnable demo.
 
 ### Documentation
 - New `docs/integration-cookbook.md` — wiring patterns for sinks (SQLite, PostgreSQL, OpenTelemetry, Splunk HEC, generic HTTP), approval handlers (Slack, email-link, queue), and durability (Temporal). All recipes are ~5–20 lines of user code; Lynx imports nothing from those packages.
-- `docs/v2-rfc.md`: reconciled drift after the audit pass — hot-swap wording, removed contradictory mypy claim, fixed `run_agent` default signature, removed stale `RunStatus.RUNNING` example, removed the doubly-listed deferred sinks block, updated event-kinds list (`action.dry_run_completed` added; `action.denied` semantics expanded), updated `cli_prompt_approval` sketch to use `asyncio.to_thread`, documented approval timeout + handler-exception semantics, updated MCP adapter signature to the new async-context-manager shape, removed lingering "Runtime per request" reference in the examples table.
+- The design RFC: reconciled drift after the audit pass — hot-swap wording, removed contradictory mypy claim, fixed `run_agent` default signature, removed stale `RunStatus.RUNNING` example, removed the doubly-listed deferred sinks block, updated event-kinds list (`action.dry_run_completed` added; `action.denied` semantics expanded), updated `cli_prompt_approval` sketch to use `asyncio.to_thread`, documented approval timeout + handler-exception semantics, updated MCP adapter signature to the new async-context-manager shape, removed lingering "Runtime per request" reference in the examples table.
 - `docs/faq.md`, `examples/README.md`, `README.md`: cross-linked the new integration cookbook.
 
 ### Examples (full-coverage pass)
@@ -252,12 +286,11 @@ so every public feature has a runnable demo.
 
 ## [2.0.0] — 2026-06-10
 
-**Breaking rewrite.** Lynx becomes a stateless, type-safe policy kernel. Pure functions over immutable values. No SQLite. No globals. No leaks. v1.0.x is preserved on PyPI for users who need durability + audit storage.
+**Breaking rewrite.** Lynx becomes a stateless, type-safe policy kernel. Pure functions over immutable values. No SQLite. No globals. No leaks. The prior 1.x line stays on PyPI for users who need durability + audit storage.
 
-### Identity (changed)
+### Identity
 
-> v1: "Policy + durable execution + hash-chained audit at the tool-call boundary."
-> v2: "**A stateless, type-safe policy kernel for AI agent tool calls.** Pure functions. Streaming events. No DB."
+Lynx is **a stateless, type-safe policy kernel for AI agent tool calls.** Pure functions. Streaming events. No DB.
 
 ### Public API
 
@@ -320,20 +353,15 @@ so every public feature has a runnable demo.
 
 ### Documentation
 
-- New: `docs/v2-rfc.md` — the formal RFC this implementation follows.
+- New: a formal design RFC for the implementation.
 - Rewritten: README, examples (12), concepts, FAQ, cookbook.
 - Removed: data-model deep dive (the new model is small enough to live in the RFC).
 
 ## [1.0.1] — 2026-06-10
 
-Docs-only release. Aligned docs with v1.0 surface. See git history for details.
+Docs-only release. Aligned docs with the 1.0 surface. See git history for details.
 
 ## [1.0.0] — 2026-06-09
 
-First public release. v1 design preserved on PyPI for users needing durability + audit chain.
+First public release.
 
-[Unreleased]: https://github.com/hadihonarvar/lynx/compare/v2.1.0...HEAD
-[2.1.0]: https://github.com/hadihonarvar/lynx/releases/tag/v2.1.0
-[2.0.0]: https://github.com/hadihonarvar/lynx/releases/tag/v2.0.0
-[1.0.1]: https://github.com/hadihonarvar/lynx/releases/tag/v1.0.1
-[1.0.0]: https://github.com/hadihonarvar/lynx/releases/tag/v1.0.0

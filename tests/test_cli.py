@@ -1,4 +1,4 @@
-"""CLI smoke tests for v2's commands."""
+"""CLI smoke tests for the command surface."""
 
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ def test_init_writes_policy_only(tmp_path) -> None:
     res = runner.invoke(cli, ["init", "--dir", str(tmp_path)])
     assert res.exit_code == 0
     assert (tmp_path / "policy.yaml").exists()
-    # v2 init writes ONLY the policy. No state dir, no toml.
+    # init writes ONLY the policy. No state dir, no toml.
     assert not (tmp_path / ".lynx").exists()
     assert not (tmp_path / "lynx.toml").exists()
 

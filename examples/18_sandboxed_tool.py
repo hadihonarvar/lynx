@@ -5,7 +5,7 @@ EXAMPLE 18 — "subprocess_executor — best-effort resource caps" (ADVANCED)
 
 SCENARIO:
     Some tools you can't fully trust to be well-behaved — even your own.
-    Since v2.3 you don't wrap each tool body by hand: pass
+    You don't wrap each tool body by hand: pass
     `executor=subprocess_executor(...)` to `run_agent` and EVERY approved
     action runs in a fresh Python interpreter with best-effort POSIX
     resource limits and a wall-clock timeout. Tool authors write plain

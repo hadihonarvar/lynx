@@ -3,7 +3,7 @@
 The goal is not to exercise each framework SDK — those are externally
 maintained — but to assert that:
 
-  1. Every adapter imports cleanly under v2 (no references to v1 internals).
+  1. Every adapter imports cleanly (no references to removed internals).
   2. ClaudeAgent / OpenAIAgent satisfy the ``Agent`` protocol when given a
      ToolSet and a stubbed client.
   3. ToolSet introspection produces the right tool-definition shapes.

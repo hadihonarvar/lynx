@@ -1,4 +1,4 @@
-"""Sandbox tests — kept as in v1 (subprocess sandbox is unchanged).
+"""Sandbox tests for the subprocess sandbox.
 
 POSIX-only (resource module unavailable on Windows); skipped there.
 """

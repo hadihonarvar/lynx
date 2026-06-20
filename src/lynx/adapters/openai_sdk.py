@@ -63,6 +63,8 @@ class OpenAIAgent:
         model: str = "gpt-5",
         system: str = "",
         client: Any | None = None,
+        base_url: str | None = None,
+        api_key: str | None = None,
     ) -> None:
         if client is None:
             try:
@@ -71,9 +73,24 @@ class OpenAIAgent:
                 raise ImportError(
                     "OpenAIAgent requires the 'openai' package. Install with: pip install openai"
                 ) from exc
-            client = AsyncOpenAI()
+            # base_url / api_key point the same Chat Completions client at any
+            # OpenAI-compatible endpoint (xAI Grok, Mistral, DeepSeek, Groq,
+            # OpenRouter, Ollama, …). Left None, the SDK reads OPENAI_* env
+            # vars as before. The agent owns (and auto-closes) what it builds.
+            # See lynx.adapters.openai_compat for a provider registry.
+            kwargs: dict[str, Any] = {}
+            if base_url is not None:
+                kwargs["base_url"] = base_url
+            if api_key is not None:
+                kwargs["api_key"] = api_key
+            client = AsyncOpenAI(**kwargs)
             self._owns_client = True
         else:
+            if base_url is not None or api_key is not None:
+                raise ValueError(
+                    "OpenAIAgent: pass either a prebuilt `client` or "
+                    "`base_url`/`api_key`, not both (the client already carries them)."
+                )
             self._owns_client = False
         self._client = client
         self._tools = tools

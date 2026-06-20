@@ -1,6 +1,6 @@
 """Release hygiene — guards that make release mistakes loud.
 
-Born from the v2.4.0 release, where the CHANGELOG-sectioning step failed
+Born from a release where the CHANGELOG-sectioning step failed
 but the tag was pushed anyway: the published sdist carried the release's
 entries under [Unreleased]. This test makes that impossible to repeat —
 bumping __version__ without sectioning the CHANGELOG turns CI red.

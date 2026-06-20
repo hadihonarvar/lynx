@@ -4,7 +4,7 @@ EXAMPLE 06 — "Stream every event to a jsonl file" (MORE COMPLEX)
 ================================================================
 
 SCENARIO:
-    Lynx v2 has no built-in audit storage. Instead, every event is
+    Lynx has no built-in audit storage. Instead, every event is
     streamed to whatever sinks you provide. Here we show:
       - stdout_sink: pretty-print for humans
       - jsonl_sink: one JSON record per event for machine processing

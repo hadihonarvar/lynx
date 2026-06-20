@@ -159,7 +159,7 @@ Everything in the `ActionRequest` and `ExecutionContext` is addressable:
 | `context.correlation_id` | string | The current run's UUID4. |
 | `context.step_seq` | int | 0-based step counter within the run. |
 | `context.timestamp` | datetime | UTC. Matching against this breaks determinism — avoid. |
-| `context.extra.<key>` | any | Free-form. Populate via the `extra=` keyword on `ExecutionContext` when wiring your own scheduler — `run_agent` always passes an empty `extra` today. Don't rely on `context.extra` from `run_agent` in v2.0. |
+| `context.extra.<key>` | any | Free-form. Populate via the `extra=` keyword on `ExecutionContext` when wiring your own scheduler — `run_agent` always passes an empty `extra` today. Don't rely on `context.extra` from `run_agent` today. |
 
 ### Decision shapes
 
@@ -264,7 +264,7 @@ Predicates are pure inlinable booleans. The compiler expands references at load 
 
 For predicates YAML can't easily express — path extraction, structural pattern matching, decimal math.
 
-**Unlike v1.x:** Python rules are passed explicitly to `compile_policy()` — no module-level `@policy.rule` registration. This keeps the kernel stateless.
+**Note:** Python rules are passed explicitly to `compile_policy()` — no module-level `@policy.rule` registration. This keeps the kernel stateless.
 
 ```python
 # policy_rules.py
@@ -536,5 +536,5 @@ See `examples/policies/sql-transform.yaml`.
 - **Typo'd operator becoming a literal field path**: compile-time check rejects close-miss spellings, but exotic typos may slip through. Prefer the explicit `.eq:` form when in doubt.
 - **Bare predicate name in leaf position**: `match: { args.x: my_predicate }` is literal-string equality on `args.x`, not a predicate reference. Predicate names only resolve inside `all_of` / `any_of` / `not` or as a top-level bare-string `match:`.
 - **Transform `jsonpath` as real JSONPath**: only `$.args.<single_key>` is supported. Nested paths become literal flat keys.
-- **Relying on `context.extra` from `run_agent`**: `run_agent` always passes an empty `extra` in v2.0. Use a Python rule if you need to inject context.
+- **Relying on `context.extra` from `run_agent`**: `run_agent` always passes an empty `extra` today. Use a Python rule if you need to inject context.
 - **Assuming `defaults.on_missing_shadow` fires for any irreversible-no-shadow tool**: it only fires when *no rule matched*. A rule explicitly matching the tool overrides the default.
