@@ -58,7 +58,9 @@ something demoable.
      one policy governs every provider. *(Landed: example 35, tests.)*
    - ⬜ **Claude Agent SDK + OpenAI Agents SDK** adapters; keep all adapters
      genuinely 3-line.
-3. **OTel sink** (`otel_sink`) — ~a day via `callback_sink`.
+3. ✅ **OTel sink** (`otel_sink`) — **shipped.** Each `AuditEvent` → one
+   OpenTelemetry span (`lynx.*` attributes), stateless, nests under the ambient
+   trace; optional `[otel]` extra. *(Example 38, tests.)*
 
 ## Phase 2 — Enterprise-real (closes deals)
 
@@ -76,7 +78,10 @@ Goal: *deployable in a regulated company*.
 
 ## Phase 3 — The moat (unique to Lynx)
 
-8. **Tamper-evident audit (the hash-chain sink).** Today audit events stream to
+8. **Tamper-evident audit (the hash-chain sink).** ✅ **Shipped (2.9.0,
+   hash-chain tier).** `hash_chained_sink` + `verify_chain` + `lynx verify`
+   land the tamper-*evident* tier; Ed25519 signing (tamper-*proof*) remains a
+   deferred follow-up. Today audit events stream to
    a sink (`jsonl_sink` → a file) with no integrity guarantee: anyone who can
    edit the file can change a line, drop a denial, or reorder events undetected.
    Every action-layer competitor advertises "signed / immutable / hash-chained"

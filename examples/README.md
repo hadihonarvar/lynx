@@ -202,6 +202,8 @@ result = await run_graph(nodes, task, router=graph,        # 7: teamwork
 | 34 | [`34_mcp_proxy.py`](34_mcp_proxy.py) | MCP proxy (`lynx.proxy.mcp_proxy`) | "Sit Lynx in front of any MCP server — every `call_tool` flows through `evaluate`→`mediate` (allow/deny/dry_run) with an audit stream, zero code change on client or server. Reads allowed, writes previewed, deletes blocked." |
 | 35 | [`35_multi_provider.py`](35_multi_provider.py) | OpenAI-compatible providers (`lynx.adapters.openai_compat`) | "One policy, any model: Grok / Mistral / DeepSeek / Groq / OpenRouter / Ollama via `openai_compatible_agent(provider, ...)` — the governance boundary is identical no matter which model proposes the calls." |
 | 36 | [`36_fastmcp_governed.py`](36_fastmcp_governed.py) | FastMCP server + Lynx proxy | "Build an MCP server the popular way (FastMCP `@mcp.tool()`), then govern it with Lynx — reads allowed, writes previewed, deletes denied, the denied delete never touching the real filesystem. Dual-mode: `--serve` is the server, no-args is the governed demo." |
+| 37 | [`37_tamper_evident_audit.py`](37_tamper_evident_audit.py) | Tamper-evident audit (`hash_chained_sink` / `verify_chain`) | "Stream audit events through a hash-chained sink, then edit one line — `verify_chain` (and `lynx verify`) catches it and names the broken line. An audit log you can quietly edit isn't an audit log." |
+| 38 | [`38_otel_audit.py`](38_otel_audit.py) | OpenTelemetry sink (`otel_sink`) | "Turn every governance decision into an OpenTelemetry span so verdicts show up in Datadog / Honeycomb / Tempo next to the rest of your traces — stateless, nests under the ambient trace, zero custom plumbing." |
 
 ## How to run any of them
 
@@ -276,6 +278,14 @@ pip install lynx-agent[mcp]   # then uncomment serve_mcp_proxy(...) for the live
 pip install lynx-agent[openai]
 python examples/35_multi_provider.py
 DEEPSEEK_API_KEY=sk-... python examples/35_multi_provider.py deepseek deepseek-chat
+
+# Example 37 — tamper-evident audit (stdlib only, no extra deps)
+python examples/37_tamper_evident_audit.py
+lynx verify <the temp file it prints>
+
+# Example 38 — OpenTelemetry sink (needs the OTel SDK for the console exporter)
+pip install lynx-agent[otel] opentelemetry-sdk
+python examples/38_otel_audit.py
 ```
 
 ## After running anything

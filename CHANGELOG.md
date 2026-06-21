@@ -7,6 +7,31 @@ All notable changes to Lynx will be documented here. Format follows [Keep a Chan
 ### Added
 - (nothing yet)
 
+## [2.9.0] — 2026-06-20
+
+### Added
+- **OpenTelemetry sink.** `otel_sink(tracer=None)` emits each `AuditEvent` as a
+  short OpenTelemetry span (named by `event.kind`, fields as `lynx.*`
+  attributes), so governance decisions land in your existing tracing backend
+  (Datadog / Honeycomb / Grafana Tempo / Jaeger) with no custom plumbing. Spans
+  use the ambient OTel context, so events nest under an instrumented request's
+  trace automatically. Stateless — every span is ended immediately, so nothing
+  accumulates over a run — and composes with `multi_sink`. Optional dependency
+  behind a guarded import: `pip install lynx-agent[otel]`.
+- **Tamper-evident audit (hash-chain sink).** `hash_chained_sink(handle)` is a
+  drop-in for `jsonl_sink` that writes each event with a `prev_hash`/`hash`
+  pair, where `hash = sha256(prev_hash + canonical_json(event))`. Because every
+  fingerprint folds in the one before it, editing a body, deleting a line, or
+  reordering events breaks every fingerprint downstream — so the log proves
+  nobody altered it. Pure sink, zero kernel change, stdlib-only (no new deps),
+  and composes with `multi_sink`.
+- **`verify_chain(path) -> VerifyResult`** and **`lynx verify <audit.jsonl>`**
+  re-walk a chained file and report `intact` or the first broken line (CLI exits
+  1 on a broken chain). Detects modified bodies, deletions, reorders, and
+  non-chained/garbled files.
+- (Tamper-*proof* Ed25519 signing is a deferred follow-up; this release ships
+  tamper-*evidence* only.)
+
 ## [2.8.0] — 2026-06-19
 
 ### Changed

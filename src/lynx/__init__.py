@@ -84,14 +84,18 @@ from lynx.policy import (
 from lynx.sdk import Agent, AgentAction
 from lynx.sinks import (
     Sink,
+    VerifyResult,
     callback_sink,
+    hash_chained_sink,
     jsonl_sink,
     multi_sink,
     noop_sink,
+    otel_sink,
     stdout_sink,
+    verify_chain,
 )
 
-__version__ = "2.8.0"
+__version__ = "2.9.0"
 
 __all__ = [
     "ActionRequest",
@@ -132,6 +136,7 @@ __all__ = [
     "ToolSet",
     "Usage",
     "Verdict",
+    "VerifyResult",
     "__version__",
     "allow",
     "approve_required",
@@ -147,6 +152,7 @@ __all__ = [
     "deny",
     "dry_run",
     "external_filter_compressor",
+    "hash_chained_sink",
     "idempotency_key",
     "identity_compressor",
     "inline_executor",
@@ -155,6 +161,7 @@ __all__ = [
     "load_policy_file",
     "multi_sink",
     "noop_sink",
+    "otel_sink",
     "replay",
     "route_compressor",
     "route_executor",
@@ -168,4 +175,5 @@ __all__ = [
     "tool",
     "transform",
     "truncate_compressor",
+    "verify_chain",
 ]

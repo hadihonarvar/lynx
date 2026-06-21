@@ -1,4 +1,4 @@
-"""Lynx CLI — minimal: init, run, trace, policy lint, policy bundle-id, --version."""
+"""Lynx CLI — minimal: init, run, trace, verify, policy lint, policy bundle-id, --version."""
 
 from __future__ import annotations
 
@@ -109,6 +109,26 @@ def run(script: str) -> None:
                 sys.path.remove(script_dir)
             except ValueError:
                 pass
+
+
+@cli.command()
+@click.argument("audit_file", type=click.Path(exists=True))
+def verify(audit_file: str) -> None:
+    """Verify the integrity of a hash-chained audit file.
+
+    Re-walks a file written by ``hash_chained_sink`` and confirms every line's
+    fingerprint recomputes and links to the line before it. Prints ``intact``
+    (exit 0) or the first broken line (exit 1) — so an edited, deleted, or
+    reordered audit event is caught.
+    """
+    from lynx.sinks import verify_chain
+
+    result = verify_chain(audit_file)
+    if result.intact:
+        click.echo(f"intact: {result.lines} events, chain verified")
+        return
+    click.echo(f"broken at line {result.broken_at}: {result.reason}", err=True)
+    sys.exit(1)
 
 
 @cli.command()

@@ -353,7 +353,8 @@ class ApprovalDecision:
 
 
 # ---------------------------------------------------------------------------
-# Audit event — sinks consume this; no hash chain
+# Audit event — sinks consume this. For tamper-evident audit, write events
+# through ``hash_chained_sink`` and verify with ``verify_chain`` / ``lynx verify``.
 # ---------------------------------------------------------------------------
 
 

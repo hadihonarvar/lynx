@@ -1,7 +1,7 @@
 # Lynx
 
-[![PyPI](https://img.shields.io/pypi/v/lynx-agent.svg?v=2.8.0)](https://pypi.org/project/lynx-agent/)
-[![Python versions](https://img.shields.io/pypi/pyversions/lynx-agent.svg?v=2.8.0)](https://pypi.org/project/lynx-agent/)
+[![PyPI](https://img.shields.io/pypi/v/lynx-agent.svg?v=2.9.0)](https://pypi.org/project/lynx-agent/)
+[![Python versions](https://img.shields.io/pypi/pyversions/lynx-agent.svg?v=2.9.0)](https://pypi.org/project/lynx-agent/)
 [![License](https://img.shields.io/pypi/l/lynx-agent.svg)](https://github.com/hadihonarvar/lynx/blob/main/LICENSE)
 [![CI](https://github.com/hadihonarvar/lynx/actions/workflows/ci.yml/badge.svg)](https://github.com/hadihonarvar/lynx/actions/workflows/ci.yml)
 
@@ -76,6 +76,7 @@ pip install lynx-agent[openai]            # GPT + any OpenAI-compatible provider
 pip install lynx-agent[langgraph]
 pip install lynx-agent[crewai]
 pip install lynx-agent[mcp]
+pip install lynx-agent[otel]              # OpenTelemetry audit sink
 ```
 
 The `[openai]` adapter also targets any **OpenAI-compatible** provider — Grok (xAI), Mistral, DeepSeek, Groq, OpenRouter, Together, Fireworks, Perplexity, Ollama — via one registry, and the *same policy* governs every one:
@@ -386,11 +387,59 @@ Built-in sinks:
 |------|-------------|
 | `stdout_sink(stream=...)` | Pretty-print events |
 | `jsonl_sink(handle)` | One JSON line per event |
+| `hash_chained_sink(handle)` | One JSON line per event, **tamper-evident** (hash-chained) |
+| `otel_sink(tracer=...)` | Emit each event as an OpenTelemetry span (`pip install lynx-agent[otel]`) |
 | `noop_sink()` | Discard (for tests) |
 | `multi_sink(*sinks)` | Fan out concurrently |
 | `callback_sink(fn)` | Wrap any async callable |
 
 Write your own — it's just `async def __call__(event: AuditEvent) -> None`.
+
+### Tamper-evident audit
+
+An audit log you can quietly edit isn't an audit log. `hash_chained_sink` is a
+drop-in for `jsonl_sink` that fingerprints every line and chains it to the line
+before it — `hash = sha256(prev_hash + canonical_json(event))` — so editing a
+body, dropping a denial, or reordering events breaks every fingerprint
+downstream. It's a pure sink (no kernel change, stdlib-only) and composes with
+`multi_sink`.
+
+```python
+from lynx import hash_chained_sink, verify_chain
+
+with open("audit.jsonl", "a") as f:
+    await run_agent(..., sinks=(hash_chained_sink(f),))
+
+verify_chain("audit.jsonl")   # VerifyResult(intact=True, lines=42, ...)
+```
+
+```console
+$ lynx verify audit.jsonl
+intact: 42 events, chain verified
+# tamper with one line, then:
+$ lynx verify audit.jsonl
+broken at line 17: hash mismatch (line was modified)   # exits 1
+```
+
+This is tamper-*evident* (proves nobody altered the log). See example 37.
+
+### OpenTelemetry
+
+Already running OTel? `otel_sink` turns every governance decision into a span so
+it lands in your existing backend (Datadog / Honeycomb / Grafana Tempo / Jaeger)
+next to the rest of your telemetry — no custom plumbing. Each `AuditEvent`
+becomes one short span named by `event.kind` with `lynx.*` attributes, and it
+nests under the ambient trace automatically when the agent runs inside an
+instrumented request. Stateless: every span is ended immediately, so nothing
+accumulates over a long run.
+
+```python
+from lynx import otel_sink
+
+await run_agent(..., sinks=(otel_sink(),))   # uses trace.get_tracer("lynx")
+```
+
+`pip install lynx-agent[otel]`. See example 38.
 
 ## Approvals — synchronous handlers
 
@@ -621,13 +670,14 @@ ToolSet, or with an agent that isn't a pure function of the conversation
 
 All 36 with one-line descriptions: [`examples/README.md`](examples/README.md).
 
-## CLI — six commands
+## CLI — seven commands
 
 ```
 lynx --version
 lynx init                        # writes policy.yaml (only)
 lynx run <script>                # runs an async main()
 lynx trace <records.jsonl>       # reconstruct a journaled run
+lynx verify <audit.jsonl>        # check a hash-chained audit log (exits 1 if broken)
 lynx policy lint                 # validates a YAML
 lynx policy bundle-id            # content-addressed ID
 ```
