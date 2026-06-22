@@ -483,6 +483,9 @@ Mediator semantics:
 
 ## CLI
 
+The policy-related commands (full reference, including output and exit codes, in
+[`docs/cli.md`](cli.md)):
+
 ```bash
 lynx init [--dir <path>] [--force]    # write a starter policy.yaml
 lynx policy lint [policy.yaml]        # compile-check + rule summary

@@ -112,6 +112,7 @@ python examples/01_hello_allow.py
 |---|---|
 | [`docs/concepts.md`](docs/concepts.md) | The model end-to-end: the loop, the five verdicts, every seam, and how they compose |
 | [`docs/02-policy-language.md`](docs/02-policy-language.md) | Full policy reference — YAML schema, operators, Python rules, layered scopes |
+| [`docs/cli.md`](docs/cli.md) | Complete CLI reference — every command, flag, output line, and exit code |
 | [`docs/cookbook.md`](docs/cookbook.md) | Copy-pasteable policy patterns (block `rm -rf`, tiered approvals, layered org/team/user) |
 | [`docs/integration-cookbook.md`](docs/integration-cookbook.md) | Wiring recipes — sinks (SQLite/Postgres/OTel/Splunk/HTTP), durability stores, Slack approvals, `ToolGuard` in your framework |
 | [`docs/what-lynx-is-and-isnt.md`](docs/what-lynx-is-and-isnt.md) | The boundary Lynx owns vs. what to compose it with |
@@ -722,13 +723,17 @@ All 40 with one-line descriptions: [`examples/README.md`](examples/README.md).
 
 ```
 lynx --version
-lynx init                        # writes policy.yaml (only)
-lynx run <script>                # runs an async main()
-lynx trace <records.jsonl>       # reconstruct a journaled run
-lynx verify <audit.jsonl>        # check a hash-chained audit log (exits 1 if broken)
-lynx policy lint                 # validates a YAML
-lynx policy bundle-id            # content-addressed ID
+lynx init [--dir <path>] [--force]    # write a starter policy.yaml (creates the dir)
+lynx run <script>                     # run a script's async main()
+lynx verify <audit.jsonl>             # check a hash-chained audit log (exits 1 if broken)
+lynx trace <records.jsonl> [--run-id <id>]   # reconstruct a durable run journal
+lynx policy lint [path]               # compile-check a policy + rule summary (default policy.yaml)
+lynx policy bundle-id [path]          # print a policy's content-addressed id
 ```
+
+Every command also has `--help`. Full reference — flags, output lines, exit
+codes, and the audit-log-vs-run-journal distinction — in
+[`docs/cli.md`](docs/cli.md).
 
 ## Status
 
