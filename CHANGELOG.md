@@ -7,6 +7,35 @@ All notable changes to Lynx will be documented here. Format follows [Keep a Chan
 ### Added
 - (nothing yet)
 
+## [2.11.0] — 2026-06-22
+
+### Added
+- **Obligations — mandatory side-actions on any verdict (the XACML/Cedar model).**
+  A policy decision can now carry `obligations` — "allow, *and also* do X" —
+  the one piece of the canonical PDP/PEP model Lynx lacked. Obligations are
+  **not** a new verdict; they ride on `allow` / `deny` / `transform` / etc., so
+  the verdict-dispatch and severity machinery are untouched.
+  - **YAML:** an `obligations:` block per rule, each entry a bare-string id
+    (shorthand for a `post` obligation) or `{ id, phase, params }`. `phase` is
+    `pre` or `post` (default `post`).
+  - **Semantics (fail-closed):** a `pre` obligation runs before the action and
+    **gates** it — a handler that raises, an unknown id, or no registry at all
+    **denies the action and the tool never runs**. A `post` obligation runs
+    after and is best-effort (it cannot un-execute the side effect). A decision
+    that never executes (deny / refused / timed-out approval) runs all its
+    obligations best-effort (e.g. notify-on-deny).
+  - **Seam (mechanism, not policy):** handlers are resolved against an
+    `ObligationRegistry` you pass — `run_agent(..., obligations={...})` — and
+    `ToolGuard`/`mediate` accept the same. The kernel ships no handlers.
+  - **Audit:** new `obligation.required` / `obligation.fulfilled` /
+    `obligation.failed` events; outcomes recorded on `ActionResult.obligations`.
+  - **Layered policies** union obligations across the winning (same-verdict)
+    layers; an overridden layer's obligations are dropped with its verdict.
+  - New public types `Obligation` / `ObligationOutcome` (exported from `lynx`),
+    and the `allow()/deny()/dry_run()/approve_required()/transform()` helpers
+    gain an optional `obligations=` argument. Fully additive — a decision with
+    no obligations behaves byte-identically to before.
+
 ## [2.10.1] — 2026-06-22
 
 Documentation and packaging metadata only — no code or behavior changes.

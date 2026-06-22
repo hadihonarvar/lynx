@@ -21,6 +21,7 @@ from lynx.core.types import (
     ActionRequest,
     Decision,
     ExecutionContext,
+    Obligation,
     Verdict,
     canonical_json,
 )
@@ -62,16 +63,43 @@ class PolicyCompileError(ValueError):
 # ---------------------------------------------------------------------------
 
 
-def allow(reason: str = "", matched_rules: tuple[str, ...] = ()) -> Decision:
-    return Decision(verdict=Verdict.ALLOW, reason=reason, matched_rules=matched_rules)
+def allow(
+    reason: str = "",
+    matched_rules: tuple[str, ...] = (),
+    obligations: tuple[Obligation, ...] = (),
+) -> Decision:
+    return Decision(
+        verdict=Verdict.ALLOW,
+        reason=reason,
+        matched_rules=matched_rules,
+        obligations=obligations,
+    )
 
 
-def deny(reason: str, matched_rules: tuple[str, ...] = ()) -> Decision:
-    return Decision(verdict=Verdict.DENY, reason=reason, matched_rules=matched_rules)
+def deny(
+    reason: str,
+    matched_rules: tuple[str, ...] = (),
+    obligations: tuple[Obligation, ...] = (),
+) -> Decision:
+    return Decision(
+        verdict=Verdict.DENY,
+        reason=reason,
+        matched_rules=matched_rules,
+        obligations=obligations,
+    )
 
 
-def dry_run(reason: str = "", matched_rules: tuple[str, ...] = ()) -> Decision:
-    return Decision(verdict=Verdict.DRY_RUN, reason=reason, matched_rules=matched_rules)
+def dry_run(
+    reason: str = "",
+    matched_rules: tuple[str, ...] = (),
+    obligations: tuple[Obligation, ...] = (),
+) -> Decision:
+    return Decision(
+        verdict=Verdict.DRY_RUN,
+        reason=reason,
+        matched_rules=matched_rules,
+        obligations=obligations,
+    )
 
 
 def approve_required(
@@ -79,6 +107,7 @@ def approve_required(
     timeout_seconds: int = 1800,
     reason: str = "",
     matched_rules: tuple[str, ...] = (),
+    obligations: tuple[Obligation, ...] = (),
 ) -> Decision:
     return Decision(
         verdict=Verdict.APPROVE_REQUIRED,
@@ -86,6 +115,7 @@ def approve_required(
         matched_rules=matched_rules,
         approvers=approvers,
         timeout_seconds=timeout_seconds,
+        obligations=obligations,
     )
 
 
@@ -93,12 +123,14 @@ def transform(
     transform_args: Mapping[str, Any],
     reason: str = "",
     matched_rules: tuple[str, ...] = (),
+    obligations: tuple[Obligation, ...] = (),
 ) -> Decision:
     return Decision(
         verdict=Verdict.TRANSFORM,
         reason=reason,
         matched_rules=matched_rules,
         transform_args=transform_args,
+        obligations=obligations,
     )
 
 
@@ -226,12 +258,29 @@ def _with_matched_rules(decision: Decision, matched_rules: tuple[str, ...]) -> D
     return replace(decision, matched_rules=matched_rules)
 
 
+def _union_obligations(decisions: list[Decision]) -> tuple[Obligation, ...]:
+    """Union obligations across the (same-verdict, winning) decisions, deduped by
+    (id, phase, params). Obligations are NOT scalar — dropping a layer's
+    "must-also-do-X" would be a fail-*open*, the unsafe direction — so unlike the
+    scalar fields they accumulate rather than first-wins."""
+    seen: set[str] = set()
+    out: list[Obligation] = []
+    for d in decisions:
+        for ob in d.obligations:
+            key = canonical_json({"id": ob.id, "phase": ob.phase, "params": dict(ob.params)})
+            if key not in seen:
+                seen.add(key)
+                out.append(ob)
+    return tuple(out)
+
+
 def _merge_same_verdict(decisions: list[Decision]) -> Decision:
     """Fold decisions that share one verdict into a single Decision, unioning
     their (layer-tagged) ``matched_rules`` in order; first decision wins for the
-    scalar fields (reason / approvers / transform_args / timeout)."""
+    scalar fields (reason / approvers / transform_args / timeout). Obligations
+    are unioned across all merged layers (see :func:`_union_obligations`)."""
     matched = tuple(r for d in decisions for r in d.matched_rules)
-    return _with_matched_rules(decisions[0], matched)
+    return replace(decisions[0], matched_rules=matched, obligations=_union_obligations(decisions))
 
 
 def strict_overrides_loose(layers: tuple[tuple[str, Decision | None], ...]) -> Decision:
@@ -525,6 +574,8 @@ def _compile_decision(
     if transform_spec is not None:
         _validate_transform_spec(transform_spec, rule_id)
 
+    obligations = _compile_obligations(raw.get("obligations"), rule_id)
+
     def factory(req: ActionRequest, ctx: ExecutionContext) -> Decision:
         return Decision(
             verdict=verdict,
@@ -533,9 +584,53 @@ def _compile_decision(
             approvers=approvers,
             timeout_seconds=timeout,
             transform_args=_apply_transform(transform_spec, req) if transform_spec else None,
+            obligations=obligations,
         )
 
     return factory
+
+
+def _compile_obligations(raw: Any, rule_id: str) -> tuple[Obligation, ...]:
+    """Parse an ``obligations:`` block into a frozen tuple. Each entry is either a
+    bare string (shorthand for a ``post`` obligation with that id and no params)
+    or a mapping ``{id, phase?, params?}``. Validation raises
+    :class:`PolicyCompileError`, consistent with the rest of the compiler."""
+    if raw is None:
+        return ()
+    if not isinstance(raw, (list, tuple)):
+        raise PolicyCompileError(
+            f"Rule {rule_id!r}: obligations must be a list, got {type(raw).__name__}"
+        )
+    out: list[Obligation] = []
+    for i, item in enumerate(raw):
+        if isinstance(item, str):
+            if not item:
+                raise PolicyCompileError(f"Rule {rule_id!r}: obligations[{i}] is an empty id")
+            out.append(Obligation(id=item))
+            continue
+        if not isinstance(item, Mapping):
+            raise PolicyCompileError(
+                f"Rule {rule_id!r}: obligations[{i}] must be a string id or a mapping, "
+                f"got {type(item).__name__}"
+            )
+        oid = item.get("id")
+        if not isinstance(oid, str) or not oid:
+            raise PolicyCompileError(
+                f"Rule {rule_id!r}: obligations[{i}] needs a non-empty string 'id'"
+            )
+        phase = item.get("phase", "post")
+        if phase not in ("pre", "post"):
+            raise PolicyCompileError(
+                f"Rule {rule_id!r}: obligations[{i}].phase must be 'pre' or 'post', got {phase!r}"
+            )
+        params = item.get("params", {})
+        if not isinstance(params, Mapping):
+            raise PolicyCompileError(
+                f"Rule {rule_id!r}: obligations[{i}].params must be a mapping, "
+                f"got {type(params).__name__}"
+            )
+        out.append(Obligation(id=oid, phase=phase, params=dict(params)))
+    return tuple(out)
 
 
 def _simple_decision(
@@ -683,6 +778,7 @@ def compile_policy(
                 "approvers": rspec.get("approvers", []),
                 "timeout_seconds": rspec.get("timeout_seconds"),
                 "transform": rspec.get("transform"),
+                "obligations": rspec.get("obligations"),
             },
             rid,
         )
@@ -710,6 +806,7 @@ def compile_policy(
                     "timeout_seconds": rspec.get("timeout_seconds"),
                     "transform": dict(rspec.get("transform") or {}),
                     "reason": rspec.get("reason", ""),
+                    "obligations": list(rspec.get("obligations") or []),
                 },
             }
         )
@@ -855,18 +952,13 @@ def _make_python_eval(
         result = fn(req, ctx)
         if result is None:
             return None
-        # Tag the python rule name in matched_rules.
+        # Tag the python rule name in matched_rules. Rebuild via replace() (not a
+        # field-by-field Decision(...)) so a new Decision field — obligations, and
+        # anything added later — is never silently dropped from a python rule.
         new_matched: tuple[str, ...] = (
             result.matched_rules if name in result.matched_rules else (*result.matched_rules, name)
         )
-        return Decision(
-            verdict=result.verdict,
-            reason=result.reason or "",
-            matched_rules=new_matched,
-            approvers=result.approvers,
-            transform_args=result.transform_args,
-            timeout_seconds=result.timeout_seconds,
-        )
+        return replace(result, matched_rules=new_matched)
 
     return step
 

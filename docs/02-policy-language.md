@@ -214,6 +214,38 @@ There is no `${...}` template interpolation at transform time. If you need value
 
 The rewritten args are passed to the tool as `**transform_args`. If your transform produces a key that isn't a parameter of the tool function, the mediator returns `ok=False` with a clean `TypeError` error rather than silently running with the original args.
 
+### Obligations — "allow, *and also* do X"
+
+An `obligations:` block attaches mandatory side-actions to **any** verdict (the XACML/Cedar model). It is *not* a verdict itself — it rides on `allow` / `deny` / `transform` / etc. Each obligation names a handler `id` that you resolve against an `ObligationRegistry` passed to `run_agent(..., obligations={...})`; the kernel ships **no** handlers (mechanism, not policy).
+
+```yaml
+- id: large-refund
+  match: { tool: refund_customer, args.amount_usd.gt: 1000 }
+  decision: allow
+  obligations:
+    - id: issue-ttl-credential   # mapping form
+      phase: pre                 # "pre" | "post"  (default "post")
+      params: { seconds: 300 }
+    - notify-finance             # bare-string shorthand → phase "post", no params
+```
+
+| Field | Notes |
+|---|---|
+| `id` | Required. The key looked up in your `ObligationRegistry`. |
+| `phase` | `pre` (default `post`). See below. |
+| `params` | Optional mapping passed verbatim to the handler. |
+
+**`phase` decides when the handler runs and what failure means — this is the fail-closed crux:**
+
+- **`pre`** runs *before* the action and **gates** it. A handler that raises (or an `id` with no registered handler) **denies the action — the tool never runs.** Use for "you may refund, *but only if* a scoped credential was successfully issued."
+- **`post`** runs *after* the action. A failure is recorded and audited but cannot un-execute the side effect (best-effort by physics). Use for "refund, *and then* notify finance."
+
+A decision that never executes (`deny`, refused/timed-out approval) runs all its obligations best-effort — e.g. `decision: deny` + `obligations: [alert-security]` for notify-on-deny.
+
+Each obligation emits `obligation.required`, then `obligation.fulfilled` / `obligation.failed` on the audit stream. **An obligation with no registry configured at all fails closed** — if your policy emits obligations, wire the registry.
+
+In **layered** policies, obligations from the *winning* (same-verdict) layers are **unioned**; an overridden layer's obligations are dropped with its verdict.
+
 ### Defaults
 
 ```yaml
@@ -384,9 +416,10 @@ class Decision:
     approvers: tuple[str, ...] = ()
     transform_args: Mapping[str, Any] | None = None
     timeout_seconds: int | None = None
+    obligations: tuple[Obligation, ...] = ()   # mandatory side-actions (see above)
 ```
 
-Use the helpers in `lynx.policy` (`allow`, `deny`, `dry_run`, `approve_required`, `transform`) for ergonomics — they set sensible defaults.
+Use the helpers in `lynx.policy` (`allow`, `deny`, `dry_run`, `approve_required`, `transform`) for ergonomics — they set sensible defaults, and each takes an optional `obligations=` argument.
 
 ---
 

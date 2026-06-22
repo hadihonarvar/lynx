@@ -13,6 +13,9 @@ htmlcov/
 
 .venv/
 venv/
+
+# local scratch / preview artifacts
+tmp/
 env/
 
 .lynx/

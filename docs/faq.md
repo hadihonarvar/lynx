@@ -107,6 +107,10 @@ Yes — two ways, depending on who drives the loop. If you want **Lynx** to driv
 
 Compile a list of `PolicyLayer`s instead of one source: `compile_policy([PolicyLayer("org", …), PolicyLayer("team", …), PolicyLayer("user", …)])`. Each layer is evaluated independently and the per-layer decisions are merged by a developer-chosen `Combiner`. Ships `strict_overrides_loose` (default, fail-closed — a broad layer sets a floor narrower layers can only tighten), `last_layer_wins` (most-specific layer may re-grant), and `first_layer_wins` — or pass your own for any trust model. A layer that matches no rule abstains; provenance is layer-tagged (`team:block-http`) in the audit. Mechanism, not policy: Lynx evaluates the layers, you decide who overrides whom. See [`02-policy-language.md`](02-policy-language.md#layered-policy-scopes) and `examples/39_layered_policy.py`.
 
+### Can a policy say "allow, but *also* do X" (notify, issue a credential, redact)?
+
+Yes — attach **obligations** to the decision. An obligation is a mandatory side-action that rides on any verdict (the XACML/Cedar model); it is not a verdict itself. In YAML: `obligations: [notify-finance]` or the long form `{ id: issue-cred, phase: pre, params: {...} }`. A `pre` obligation runs *before* the action and gates it (handler raises → the tool never runs); a `post` obligation runs after (best-effort). You resolve each `id` against a registry you pass — `run_agent(..., obligations={"notify-finance": handler})` — because the kernel ships no handlers (mechanism, not policy). Unknown id or no registry → fail-closed. Every obligation emits `obligation.required/fulfilled/failed` audit events. See [`02-policy-language.md`](02-policy-language.md#obligations--allow-and-also-do-x) and the cookbook.
+
 ### How do I file a security issue?
 
 [GitHub Security Advisories](https://github.com/hadihonarvar/lynx/security/advisories/new). Do not file a public issue.

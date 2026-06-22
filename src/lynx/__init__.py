@@ -33,6 +33,8 @@ from lynx.core.types import (
     ExecutionContext,
     FinalAnswer,
     Message,
+    Obligation,
+    ObligationOutcome,
     Principal,
     RunResult,
     ToolCall,
@@ -103,7 +105,7 @@ from lynx.sinks import (
     verify_chain,
 )
 
-__version__ = "2.10.1"
+__version__ = "2.11.0"
 
 __all__ = [
     "ActionRequest",
@@ -132,6 +134,8 @@ __all__ = [
     "LayeredPolicyBundle",
     "Message",
     "NodeOutcome",
+    "Obligation",
+    "ObligationOutcome",
     "Policy",
     "PolicyBundle",
     "PolicyLayer",

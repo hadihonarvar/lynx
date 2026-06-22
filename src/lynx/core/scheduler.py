@@ -48,6 +48,7 @@ if TYPE_CHECKING:
     from lynx.approvals import ApprovalHandler
     from lynx.cancel import Cancelled
     from lynx.compressors import Compressor
+    from lynx.core.mediator import ObligationRegistry
     from lynx.durability import RunStore
     from lynx.executors import Executor
     from lynx.sdk import Agent
@@ -96,6 +97,7 @@ async def run_agent(
     executor: Executor | None = None,
     cancel: Cancelled | None = None,
     compressor: Compressor | None = None,
+    obligations: ObligationRegistry | None = None,
 ) -> RunResult:
     """Run an agent through one task. Stateless unless you pass a store.
 
@@ -684,7 +686,32 @@ async def run_agent(
                     {"seq": step_seq, "approvers": list(decision.approvers)},
                 )
 
-            result = await mediate(request, decision, tools, on_approval, executor)
+            if decision.obligations:
+                await emit(
+                    "obligation.required",
+                    {
+                        "seq": step_seq,
+                        "obligations": [
+                            {"id": o.id, "phase": o.phase} for o in decision.obligations
+                        ],
+                    },
+                )
+
+            result = await mediate(request, decision, tools, on_approval, executor, obligations)
+
+            # Surface each obligation outcome on the audit stream. A failed
+            # pre-obligation also turns the result into a denial above, so this
+            # is the forensic record of *why*.
+            for outcome in result.obligations:
+                await emit(
+                    "obligation.fulfilled" if outcome.fulfilled else "obligation.failed",
+                    {
+                        "seq": step_seq,
+                        "id": outcome.id,
+                        "phase": outcome.phase,
+                        "error": outcome.error,
+                    },
+                )
 
             # ---- result compression (token optimization seam). Applied to
             # FRESH executions only — a replayed result took this path in a

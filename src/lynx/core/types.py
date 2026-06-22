@@ -26,6 +26,8 @@ __all__ = [
     "ExecutionContext",
     "FinalAnswer",
     "Message",
+    "Obligation",
+    "ObligationOutcome",
     "Principal",
     "RunResult",
     "ToolCall",
@@ -316,6 +318,26 @@ class ActionRequest:
 
 
 @dataclass(frozen=True, slots=True)
+class Obligation:
+    """A mandatory side-action attached to a Decision (XACML/Cedar model).
+
+    Rides on *any* verdict; it is not a verdict itself. ``id`` is a
+    developer-defined key resolved against an ``ObligationRegistry`` at
+    enforcement time (the kernel ships no handlers — mechanism, not policy).
+
+    ``phase`` decides when the handler runs and what failure means:
+      * ``"pre"``  — runs before the action; a failure DENIES the action
+                     (fail-closed: the tool never executes).
+      * ``"post"`` — runs after the action; a failure is flagged + audited
+                     but cannot un-execute the side effect (best-effort).
+    """
+
+    id: str
+    phase: Literal["pre", "post"] = "post"
+    params: Mapping[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True, slots=True)
 class Decision:
     verdict: Verdict
     reason: str = ""
@@ -323,6 +345,19 @@ class Decision:
     approvers: tuple[str, ...] = ()
     transform_args: Mapping[str, Any] | None = None
     timeout_seconds: int | None = None
+    obligations: tuple[Obligation, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class ObligationOutcome:
+    """The result of attempting one obligation, surfaced on ActionResult so the
+    scheduler can emit ``obligation.fulfilled`` / ``obligation.failed`` audit
+    events without a side channel."""
+
+    id: str
+    phase: Literal["pre", "post"]
+    fulfilled: bool
+    error: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -331,6 +366,7 @@ class ActionResult:
     value: Any | None = None
     error: str | None = None
     duration_ms: int = 0
+    obligations: tuple[ObligationOutcome, ...] = ()
 
 
 # ---------------------------------------------------------------------------

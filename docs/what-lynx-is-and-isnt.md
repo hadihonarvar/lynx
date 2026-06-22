@@ -29,6 +29,10 @@ where being *in the loop on every action* is the whole point:
   each evaluated on its own, then merged by a developer-chosen `Combiner`
   (fail-closed by default). Lynx owns the *mechanism*; you own the trust model
   (who overrides whom). Provenance is layer-tagged in the audit.
+- **Obligations** — "allow, *and also* do X" attached to any verdict (the
+  XACML/Cedar model), with a fail-closed `pre` phase that gates execution on a
+  side-action succeeding. Parity with the formal authorization model that
+  Cedar and XACML define; the handlers are yours, the enforcement is Lynx's.
 - **Human-in-the-loop** — approvals with enforced timeouts; previews before
   irreversible actions.
 - **Durable execution** — crash-resume, idempotency, no double side effects;

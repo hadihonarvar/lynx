@@ -43,7 +43,11 @@ The five possible policy outcomes:
 
 ## Decision
 
-Frozen dataclass returned by the PDP. Includes the verdict, reason, matched rule IDs, and optional approvers / timeout / transform_args.
+Frozen dataclass returned by the PDP. Includes the verdict, reason, matched rule IDs, and optional approvers / timeout / transform_args / **obligations**.
+
+## Obligation
+
+A mandatory side-action attached to a `Decision` — the XACML/Cedar "allow, *and also* do X" model. It is **not** a verdict; it rides on whatever verdict the decision carries. Each `Obligation(id, phase, params)` names a handler resolved against an `ObligationRegistry` you pass to `run_agent(..., obligations=...)` (the kernel ships none — mechanism, not policy). `phase="pre"` runs before the action and **gates** it (a failed handler denies the action — the tool never runs); `phase="post"` runs after (best-effort; cannot un-execute). Enforcement lives in the [Mediator](#mediator) — the PEP — which records each attempt as an `ObligationOutcome` on the `ActionResult`; the scheduler emits `obligation.required / obligation.fulfilled / obligation.failed`. An unknown id, or any obligation when no registry is configured, **fails closed**. In layered policies, obligations from the winning (same-verdict) layers are **unioned**.
 
 ## Policy
 

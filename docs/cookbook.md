@@ -282,3 +282,46 @@ bundle = compile_policy(
     merge=last_layer_wins,
 )
 ```
+
+## Obligations — gate on a credential, notify on deny
+
+Attach mandatory side-actions to a verdict. A `pre` obligation must succeed
+*before* the tool runs (fail-closed); a `post` one runs after (best-effort).
+You supply the handlers — the kernel ships none.
+
+```yaml
+rules:
+  - id: large-refund
+    match: { tool: refund_customer, args.amount_usd.gt: 1000 }
+    decision: allow
+    obligations:
+      - { id: issue-ttl-credential, phase: pre, params: { seconds: 300 } }
+      - notify-finance            # shorthand: phase "post", no params
+
+  - id: blocked-region
+    match: { args.country.in: ["XX", "YY"] }
+    decision: deny
+    obligations: [alert-security]  # notify-on-deny (deny never executes the tool)
+```
+
+```python
+async def issue_ttl_credential(ob, req, ctx):
+    # raise to fail closed — the refund will NOT run if this throws
+    await vault.issue(ttl=ob.params["seconds"], principal=ctx.principal.id)
+
+async def notify_finance(ob, req, ctx):
+    await slack.post("#finance", f"refund {req.args['amount_usd']} by {ctx.principal.id}")
+
+async def alert_security(ob, req, ctx):
+    await pager.page("security", f"blocked tool {req.tool} from {ctx.principal.id}")
+
+await run_agent(..., obligations={
+    "issue-ttl-credential": issue_ttl_credential,
+    "notify-finance": notify_finance,
+    "alert-security": alert_security,
+})
+```
+
+An obligation id with no handler in the registry (or no registry at all) **fails
+closed** — for a `pre` obligation that denies the action. Wire every id your
+policy references.
