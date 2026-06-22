@@ -137,7 +137,9 @@ class ToolGuard:
             # stream is uniform with the known-tool path. The request we build for
             # the trail uses fail-closed metadata (irreversible, no shadow).
             reason = f"unknown tool: {tool_name!r}"
-            request = self._build_request(tool_name, args, extra, seq=seq, declared=_UNKNOWN_METADATA)
+            request = self._build_request(
+                tool_name, args, extra, seq=seq, declared=_UNKNOWN_METADATA
+            )
             decision = Decision(
                 verdict=Verdict.DENY, reason=reason, matched_rules=("<unknown_tool>",)
             )

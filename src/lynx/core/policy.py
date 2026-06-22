@@ -787,9 +787,7 @@ def _strictest_verdict(verdicts: Iterable[Verdict]) -> Verdict:
     return max(verdicts, key=lambda v: _VERDICT_SEVERITY[v])
 
 
-def _compile_layered(
-    layers: tuple[PolicyLayer, ...], *, merge: Combiner
-) -> LayeredPolicyBundle:
+def _compile_layered(layers: tuple[PolicyLayer, ...], *, merge: Combiner) -> LayeredPolicyBundle:
     compiled: list[tuple[str, PolicyBundle]] = []
     seen: set[str] = set()
     for layer in layers:
@@ -1029,9 +1027,7 @@ def _evaluate_layered(
 
 def _tag_layer(name: str, decision: Decision) -> Decision:
     """Prefix each matched-rule id with the layer name for audit provenance."""
-    return _with_matched_rules(
-        decision, tuple(f"{name}:{r}" for r in decision.matched_rules)
-    )
+    return _with_matched_rules(decision, tuple(f"{name}:{r}" for r in decision.matched_rules))
 
 
 def _legacy_eval_order(bundle: PolicyBundle) -> tuple[_EvalStep, ...]:

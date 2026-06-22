@@ -49,9 +49,7 @@ def _req(tool: str = "http", *, reversible: bool = True, has_shadow: bool = True
     return ActionRequest(
         tool=tool,
         args={},
-        declared=ToolMetadata(
-            cost="low", reversible=reversible, scope=(), has_shadow=has_shadow
-        ),
+        declared=ToolMetadata(cost="low", reversible=reversible, scope=(), has_shadow=has_shadow),
         context=ExecutionContext(
             principal=Principal(kind="user", id="t"),
             environment="dev",

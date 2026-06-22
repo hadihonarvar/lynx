@@ -228,9 +228,7 @@ async def test_render_result_empty_string_for_successful_none() -> None:
 
     g = ToolGuard(
         tools=ToolSet.from_functions(ping),
-        policy=compile_policy(
-            "version: 1\ndefaults: {on_no_match: allow}\nrules: []\n"
-        ),
+        policy=compile_policy("version: 1\ndefaults: {on_no_match: allow}\nrules: []\n"),
     )
     call = await g.check("ping", {"x": 1})
     assert call.allowed and call.result.value is None

@@ -225,9 +225,7 @@ def verify_chain(path: str) -> VerifyResult:
             record = {k: v for k, v in obj.items() if k not in ("hash", "prev_hash")}
             expected = _chain_hash(recorded_prev, record)
             if expected != recorded_hash:
-                return VerifyResult(
-                    False, count, lineno, "hash mismatch (line was modified)"
-                )
+                return VerifyResult(False, count, lineno, "hash mismatch (line was modified)")
             prev_hash = recorded_hash
     return VerifyResult(True, count)
 

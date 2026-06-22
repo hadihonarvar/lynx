@@ -65,9 +65,7 @@ PROVIDERS: Mapping[str, Provider] = MappingProxyType(
         "mistral": Provider("mistral", "https://api.mistral.ai/v1", "MISTRAL_API_KEY"),
         "deepseek": Provider("deepseek", "https://api.deepseek.com/v1", "DEEPSEEK_API_KEY"),
         "groq": Provider("groq", "https://api.groq.com/openai/v1", "GROQ_API_KEY"),
-        "openrouter": Provider(
-            "openrouter", "https://openrouter.ai/api/v1", "OPENROUTER_API_KEY"
-        ),
+        "openrouter": Provider("openrouter", "https://openrouter.ai/api/v1", "OPENROUTER_API_KEY"),
         "together": Provider("together", "https://api.together.xyz/v1", "TOGETHER_API_KEY"),
         "fireworks": Provider(
             "fireworks", "https://api.fireworks.ai/inference/v1", "FIREWORKS_API_KEY"
@@ -137,6 +135,4 @@ def openai_compatible_agent(
     ``async with`` / ``aclose()``), exactly like ``OpenAIAgent()``.
     """
     base_url, key = resolve_credentials(provider, api_key=api_key)
-    return OpenAIAgent(
-        tools=tools, model=model, system=system, base_url=base_url, api_key=key
-    )
+    return OpenAIAgent(tools=tools, model=model, system=system, base_url=base_url, api_key=key)
