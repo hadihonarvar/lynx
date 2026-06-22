@@ -34,9 +34,7 @@ async def test_live_proxy_governs_real_mcp_server(tmp_path: Path) -> None:
     secret = tmp_path / "keep.txt"
     secret.write_text("hello-secret")
 
-    params = StdioServerParameters(
-        command=sys.executable, args=[str(_PROXY), str(tmp_path)]
-    )
+    params = StdioServerParameters(command=sys.executable, args=[str(_PROXY), str(tmp_path)])
     async with stdio_client(params) as (read, write):
         async with ClientSession(read, write) as client:
             await client.initialize()
@@ -51,9 +49,7 @@ async def test_live_proxy_governs_real_mcp_server(tmp_path: Path) -> None:
             assert "hello-secret" in _texts(read_res)
 
             # 3. write_file is dry_run → preview, no real write.
-            await client.call_tool(
-                "write_file", {"name": "keep.txt", "content": "OVERWRITTEN"}
-            )
+            await client.call_tool("write_file", {"name": "keep.txt", "content": "OVERWRITTEN"})
 
             # 4. delete_file is denied → proxy returns a denial, upstream untouched.
             del_res = await client.call_tool("delete_file", {"name": "keep.txt"})

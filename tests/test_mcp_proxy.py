@@ -43,12 +43,8 @@ def _make_proxy(calls: list[tuple[str, dict]], sinks=()):
         calls.append((name, dict(args)))
         return f"ran {name}"
 
-    tools = build_toolset(
-        ["read_file", "write_file", "delete_file"], upstream, default_classify
-    )
-    return GovernedProxy(
-        policy=compile_policy(POLICY), tools=tools, sinks=sinks
-    )
+    tools = build_toolset(["read_file", "write_file", "delete_file"], upstream, default_classify)
+    return GovernedProxy(policy=compile_policy(POLICY), tools=tools, sinks=sinks)
 
 
 async def test_allow_forwards_to_upstream():

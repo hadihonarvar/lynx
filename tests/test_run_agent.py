@@ -85,8 +85,12 @@ async def test_run_started_surfaces_effective_budget() -> None:
 
     agent = _ScriptedAgent(FinalAnswer(text="done"))
     await run_agent(
-        agent, task="t", tools=ToolSet.from_functions(echo), policy=policy,
-        sinks=(callback_sink(collect),), on_approval=auto_deny("x"),
+        agent,
+        task="t",
+        tools=ToolSet.from_functions(echo),
+        policy=policy,
+        sinks=(callback_sink(collect),),
+        on_approval=auto_deny("x"),
     )
     started = next(e for e in seen if e.kind == "run.started")
     # The effective caps are visible on the audit stream by default.
@@ -106,8 +110,12 @@ async def test_unlimited_budget_emits_run_unbounded() -> None:
 
     agent = _ScriptedAgent(FinalAnswer(text="done"))
     await run_agent(
-        agent, task="t", tools=ToolSet.from_functions(echo), policy=policy,
-        budget=Budget.unlimited(), sinks=(callback_sink(collect),),
+        agent,
+        task="t",
+        tools=ToolSet.from_functions(echo),
+        policy=policy,
+        budget=Budget.unlimited(),
+        sinks=(callback_sink(collect),),
         on_approval=auto_deny("x"),
     )
     # Opting out of caps is loud, never silent.

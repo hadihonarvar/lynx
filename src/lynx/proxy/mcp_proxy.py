@@ -89,9 +89,7 @@ class ToolClassifier:
     reversible: bool = False
     scope: tuple[str, ...] = ("mcp:tool",)
     # Optional per-name overrides, e.g. {"read_file": ToolMetadata(reversible=True, ...)}.
-    overrides: Mapping[str, ToolMetadata] = field(
-        default_factory=lambda: MappingProxyType({})
-    )
+    overrides: Mapping[str, ToolMetadata] = field(default_factory=lambda: MappingProxyType({}))
 
     def __call__(self, name: str) -> ToolMetadata:
         if name in self.overrides:
@@ -281,9 +279,7 @@ async def govern_call(
             "approval.requested", {"tool": name, "approvers": list(decision.approvers)}
         )
 
-    result = await mediate(
-        request, decision, proxy.tools, proxy.on_approval, proxy.executor
-    )
+    result = await mediate(request, decision, proxy.tools, proxy.on_approval, proxy.executor)
 
     # Same outcome ladder as core/scheduler.py, so the audit vocabulary is
     # identical whether a call goes through run_agent or the proxy:
@@ -298,22 +294,16 @@ async def govern_call(
         )
 
     if result.ok:
-        outcome_kind = (
-            "action.dry_run_completed" if verdict == "dry_run" else "action.completed"
-        )
+        outcome_kind = "action.dry_run_completed" if verdict == "dry_run" else "action.completed"
         await proxy._emit(
             outcome_kind,
             {"tool": name, "verdict": verdict, "duration_ms": result.duration_ms},
         )
     else:
         outcome_kind = (
-            "action.denied"
-            if verdict in ("deny", "approve_required")
-            else "action.failed"
+            "action.denied" if verdict in ("deny", "approve_required") else "action.failed"
         )
-        await proxy._emit(
-            outcome_kind, {"tool": name, "verdict": verdict, "reason": result.error}
-        )
+        await proxy._emit(outcome_kind, {"tool": name, "verdict": verdict, "reason": result.error})
     return GovernResult(result=result, verdict=verdict)
 
 
@@ -405,6 +395,4 @@ async def serve_mcp_proxy(
                 return [mcp_types.TextContent(type="text", text=text)]
 
             async with stdio_server() as (d_read, d_write):
-                await server.run(
-                    d_read, d_write, server.create_initialization_options()
-                )
+                await server.run(d_read, d_write, server.create_initialization_options())
