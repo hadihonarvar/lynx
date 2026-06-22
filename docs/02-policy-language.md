@@ -499,6 +499,55 @@ Matching against `context.timestamp` will technically work but breaks determinis
 
 ---
 
+## Layered policy scopes
+
+Real authorization is rarely one flat file. A platform team sets an org-wide floor; a squad layers its own rules on top; an individual may have a personal sandbox config. Lynx composes these without hard-coding *who overrides whom* — that precedence is a business decision, so the kernel ships the **mechanism** and you supply the **policy**.
+
+Pass a list of `PolicyLayer` to `compile_policy` instead of a single source. Each layer is compiled and evaluated **independently**; the per-layer decisions are handed to a developer-chosen `Combiner`, which returns the final `Decision`.
+
+```python
+from lynx import PolicyLayer, compile_policy, last_layer_wins
+
+bundle = compile_policy(
+    [
+        PolicyLayer("org", org_yaml),
+        PolicyLayer("team", team_yaml),
+        PolicyLayer("user", user_yaml, python_rules=(my_rule,)),
+    ],
+    merge=last_layer_wins,   # optional; defaults to strict_overrides_loose
+)
+```
+
+### Shipped combiners (none privileged)
+
+| Combiner | Rule | Use when |
+|----------|------|----------|
+| `strict_overrides_loose` *(default)* | most-restrictive verdict wins (`deny > approve_required > dry_run > transform > allow`) | broader layers set a floor narrower layers can only tighten — **fail-closed** |
+| `last_layer_wins` | the last non-abstaining layer decides outright (CSS cascade) | the most-specific layer is authoritative and may re-grant |
+| `first_layer_wins` | the first non-abstaining layer decides | the broadest layer is authoritative |
+
+A `Combiner` is just `Callable[[tuple[tuple[str, Decision | None], ...]], Decision]` — write your own to encode any trust model (soft floors, role-weighted votes, quorum). It is only ever called with at least one non-abstaining layer.
+
+### Abstention and defaults
+
+- A layer that **matches no rule abstains** (contributes `None`) — it does not vote. An empty or non-matching layer can never force a verdict.
+- **Defaults apply only when every layer abstains.** The combined default is the **strictest** `on_no_match` / `on_missing_shadow` across all layers, so a forgotten layer can never loosen the floor.
+
+### Provenance
+
+Each layer's `matched_rules` are prefixed with the layer name, and rule-error markers are layer-tagged too:
+
+```
+matched_rules = ("team:block-http",)
+matched_rules = ("user:<rule_error:my_rule:TypeError>", "org:allow-http")
+```
+
+The bundle `id` folds in each layer's id, the combiner's name, and the combined defaults, so it is deterministic across processes and changes when the merge strategy changes.
+
+> Pass `python_rules` per layer via `PolicyLayer(..., python_rules=...)`, not to the top-level `compile_policy` call (which would be ambiguous about ownership and is rejected). See `examples/39_layered_policy.py`.
+
+---
+
 ## What this language deliberately does NOT do
 
 - **No turing-completeness in YAML.** No loops, no variables, no arbitrary computation.

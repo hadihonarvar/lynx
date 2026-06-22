@@ -71,14 +71,22 @@ from lynx.graph import (
     load_graph_file,
     run_graph,
 )
+from lynx.integrations import GovernedCall, ToolGuard
 from lynx.policy import (
+    Combiner,
+    LayeredPolicyBundle,
+    Policy,
     PolicyBundle,
+    PolicyLayer,
     allow,
     approve_required,
     compile_policy,
     deny,
     dry_run,
+    first_layer_wins,
+    last_layer_wins,
     load_policy_file,
+    strict_overrides_loose,
     transform,
 )
 from lynx.sdk import Agent, AgentAction
@@ -95,7 +103,7 @@ from lynx.sinks import (
     verify_chain,
 )
 
-__version__ = "2.9.0"
+__version__ = "2.10.0"
 
 __all__ = [
     "ActionRequest",
@@ -109,19 +117,24 @@ __all__ = [
     "Budget",
     "CancelToken",
     "Cancelled",
+    "Combiner",
     "Compressor",
     "Decision",
     "DuplicateRecord",
     "ExecutionContext",
     "Executor",
     "FinalAnswer",
+    "GovernedCall",
     "GraphCompileError",
     "GraphNode",
     "GraphResult",
     "GraphSpec",
+    "LayeredPolicyBundle",
     "Message",
     "NodeOutcome",
+    "Policy",
     "PolicyBundle",
+    "PolicyLayer",
     "Principal",
     "Router",
     "RunResult",
@@ -132,6 +145,7 @@ __all__ = [
     "StepView",
     "ToolCall",
     "ToolDef",
+    "ToolGuard",
     "ToolMetadata",
     "ToolSet",
     "Usage",
@@ -152,11 +166,13 @@ __all__ = [
     "deny",
     "dry_run",
     "external_filter_compressor",
+    "first_layer_wins",
     "hash_chained_sink",
     "idempotency_key",
     "identity_compressor",
     "inline_executor",
     "jsonl_sink",
+    "last_layer_wins",
     "load_graph_file",
     "load_policy_file",
     "multi_sink",
@@ -171,6 +187,7 @@ __all__ = [
     "stdout_sink",
     "step_record_from_json",
     "step_record_to_json",
+    "strict_overrides_loose",
     "subprocess_executor",
     "tool",
     "transform",

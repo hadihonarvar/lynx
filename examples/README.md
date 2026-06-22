@@ -1,6 +1,6 @@
 # examples/
 
-A learning path of 33 examples. Each is **self-contained** and starts with a plain-language SCENARIO explaining the problem it solves.
+A learning path of 40 examples. Each is **self-contained** and starts with a plain-language SCENARIO explaining the problem it solves.
 
 Read 01–12 in order for the core narrative; 13–33 cover every remaining feature for full coverage.
 
@@ -162,7 +162,7 @@ result = await run_graph(nodes, task, router=graph,        # 7: teamwork
 ```
 → example **28** (the full-stack capstone)
 
-## The 33 examples
+## The 40 examples
 
 | # | File | Verdict shown | Problem in one line |
 |---|------|--------------|---------------------|
@@ -204,6 +204,8 @@ result = await run_graph(nodes, task, router=graph,        # 7: teamwork
 | 36 | [`36_fastmcp_governed.py`](36_fastmcp_governed.py) | FastMCP server + Lynx proxy | "Build an MCP server the popular way (FastMCP `@mcp.tool()`), then govern it with Lynx — reads allowed, writes previewed, deletes denied, the denied delete never touching the real filesystem. Dual-mode: `--serve` is the server, no-args is the governed demo." |
 | 37 | [`37_tamper_evident_audit.py`](37_tamper_evident_audit.py) | Tamper-evident audit (`hash_chained_sink` / `verify_chain`) | "Stream audit events through a hash-chained sink, then edit one line — `verify_chain` (and `lynx verify`) catches it and names the broken line. An audit log you can quietly edit isn't an audit log." |
 | 38 | [`38_otel_audit.py`](38_otel_audit.py) | OpenTelemetry sink (`otel_sink`) | "Turn every governance decision into an OpenTelemetry span so verdicts show up in Datadog / Honeycomb / Tempo next to the rest of your traces — stateless, nests under the ambient trace, zero custom plumbing." |
+| 39 | [`39_layered_policy.py`](39_layered_policy.py) | Layered policy scopes (`PolicyLayer` + `Combiner`) | "Compose org / team / user policies into one bundle: `strict_overrides_loose` (default, fail-closed) sets a floor the user can't lift; `last_layer_wins` lets the most-specific layer re-grant; bring your own `Combiner` for any trust model. Lynx evaluates each layer — you choose who overrides whom." |
+| 40 | [`40_framework_native_governance.py`](40_framework_native_governance.py) | Framework-native governance (`ToolGuard` + OpenAI Agents SDK) | "When the framework owns the loop, drop `ToolGuard` in front of its tool calls: `await guard.check(name, args)` runs the same `evaluate`→`mediate` kernel as `run_agent`, so all five verdicts work at the boundary — no proxy, no rewrite. `governed_function_tools(...)` turns a ToolSet into governed OpenAI Agents SDK tools in one line." |
 
 ## How to run any of them
 
@@ -211,8 +213,10 @@ result = await run_graph(nodes, task, router=graph,        # 7: teamwork
 # Set up once
 pip install -e ".[dev]"
 
-# Examples 01-04, 06-08, 10, 13-19, 23-31 — no API key, no extras needed
+# Examples 01-04, 06-08, 10, 13-19, 23-31, 37, 39-40 — no API key, no extras needed
 python examples/01_hello_allow.py
+python examples/39_layered_policy.py             # layered policy scopes + combiners
+python examples/40_framework_native_governance.py  # ToolGuard — govern a framework's tool calls
 python examples/02_block_dangerous.py
 python examples/03_preview_writes.py
 python examples/04_human_approval.py    # type "y" + Enter at the prompt

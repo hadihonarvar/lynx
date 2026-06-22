@@ -1,7 +1,7 @@
 # Lynx
 
-[![PyPI](https://img.shields.io/pypi/v/lynx-agent.svg?v=2.9.0)](https://pypi.org/project/lynx-agent/)
-[![Python versions](https://img.shields.io/pypi/pyversions/lynx-agent.svg?v=2.9.0)](https://pypi.org/project/lynx-agent/)
+[![PyPI](https://img.shields.io/pypi/v/lynx-agent.svg?v=2.10.0)](https://pypi.org/project/lynx-agent/)
+[![Python versions](https://img.shields.io/pypi/pyversions/lynx-agent.svg?v=2.10.0)](https://pypi.org/project/lynx-agent/)
 [![License](https://img.shields.io/pypi/l/lynx-agent.svg)](https://github.com/hadihonarvar/lynx/blob/main/LICENSE)
 [![CI](https://github.com/hadihonarvar/lynx/actions/workflows/ci.yml/badge.svg)](https://github.com/hadihonarvar/lynx/actions/workflows/ci.yml)
 
@@ -51,12 +51,14 @@ result = await run_agent(
 - **Immutable values.** Every public type is `frozen=True, slots=True`. Mutation raises at runtime; mypy catches it at write time.
 - **No globals.** No tool registry, no broker, no module-level state. ToolSet is built explicitly at call site.
 - **Hot-swappable policy.** Pass a different `PolicyBundle` on the next `run_agent` call — the bundle is an immutable value; the kernel holds nothing between calls. (Mid-run reload is not supported; build a new bundle and use it on the next run.)
+- **Layered policy scopes** *(optional)*. Compose independent named policies — `compile_policy([PolicyLayer("org", …), PolicyLayer("team", …), PolicyLayer("user", …)])` — each evaluated on its own, then combined by a developer-chosen `Combiner`. Ships `strict_overrides_loose` (default, fail-closed: broadest layer sets a floor narrower layers can only tighten), `last_layer_wins` (most-specific layer may re-grant), and `first_layer_wins` — or bring your own for any trust model. Layers that match no rule abstain; provenance is layer-tagged (`team:block-http`). Mechanism, not policy: Lynx evaluates the layers; you decide who overrides whom. See example 39 and [`docs/02-policy-language.md`](docs/02-policy-language.md#layered-policy-scopes).
 - **Durable runs, no double side effects** *(opt-in)*. Pass a `RunStore` you implement over your own storage and a stable `run_id`: a crashed run resumes at the first incomplete step — the model is not re-called for completed steps (no re-burned tokens) and journaled actions are not re-executed (no double charges). Two racing workers resolve to one winner; the loser exits `superseded` before executing anything.
 - **Token metering and caps.** Adapters report per-step input/output token counts; the kernel streams them as `step.usage` events, totals them on `RunResult.usage`, and enforces `Budget(tokens=…, input_tokens=…, output_tokens=…)` between steps. The kernel counts and enforces counts — it never converts tokens to money; multiply by your own rates in a sink.
 - **Token optimization (the compressor seam)** *(opt-in)*. Metering measures spend; this reduces it. Pass `compressor=` and every fresh tool result is shrunk *before* it enters the conversation, the journal, and any replay — so a 40 KB log dumped once isn't re-sent in full on every later step. Lynx ships pure-Python reference compressors (`truncate_compressor`, `dedup_compressor`, `compose_compressors`, `route_compressor` via `@tool(compress=…)`, `external_filter_compressor`) and **fails open** — a broken compressor never drops a real output. Lynx is *not* a token optimizer; it owns the seam where yours plugs in. Separately, the Claude adapter now enables Anthropic **prompt caching** (`cache_prompt=True`) so a long loop re-reads prior turns from cache instead of re-billing them. *(RTK — github.com/rtk-ai/rtk — has no stdin filter and is wired at the tool level: your shell tool runs `rtk <cmd>`.)*
 - **Pluggable execution (the executor seam).** Every approved action flows through one `Executor` — in-process by default, a subprocess with rlimits, or *your* Docker/gVisor/E2B wrapper (one async callable). Route per-tool via `@tool(isolation="container")` + `route_executor({...})`, failing closed when a requested isolation has no route. Lynx defines the seam; the security boundary is whatever you plug in.
 - **Handoff graphs** *(optional)*. Sequential multi-agent workflows where **the edge is a permission boundary**: each node is one `run_agent` call with its own policy/tools/budget, and edges route on outcomes — including **denial counts**. Bounded by construction (`max_transitions`), explicit context passing, YAML-declarable, durable via the same `RunStore`. Just sugar over a loop of `run_agent` calls — skip it and write the loop yourself anytime.
 - **MCP proxy** *(optional)*. Put Lynx *in front of* any MCP server: the client (Claude Desktop/Code, Cursor, …) points at Lynx instead of the server, and every `call_tool` flows through the same `evaluate → mediate` path — `allow / deny / dry_run / approve_required / transform` — with an audit stream, **zero code change** on client or server. `serve_mcp_proxy(upstream, policy=…, sinks=…)` wires the stdio transport; `GovernedProxy` / `govern_call` are the transport-free, unit-testable core. See example 34. *(`pip install lynx-agent[mcp]`.)*
+- **Framework-native governance** *(optional)*. When an agent *framework* owns the loop (OpenAI Agents SDK, LangChain, CrewAI, PydanticAI) instead of Lynx, drop a `ToolGuard` in front of its tool calls — `await guard.check(tool_name, args)` runs the same `evaluate → mediate` kernel and returns a `GovernedCall`, so all five verdicts work at the boundary with no proxy and no rewrite. This is the inverse of an **adapter** (`lynx.adapters`, where Lynx drives the loop): here the framework drives, Lynx governs each call inside it. `governed_function_tools(tools, policy=…)` turns a `ToolSet` into governed OpenAI Agents SDK tools in one line. See example 40. *(`pip install lynx-agent[openai-agents]` for the SDK shim; `ToolGuard` itself is stdlib-only.)*
 - **Operability controls.** A kill-switch (`cancel=CancelToken()`) checked at every step boundary and before each tool runs — a cancelled run stops after at most one more action. Plus a repetition gate (`Budget(max_repeated_calls=)`) for same-tool-same-args loops, and per-step / per-tool timeouts.
 
 ## What Lynx does NOT do
@@ -75,6 +77,7 @@ pip install lynx-agent[anthropic]         # Claude adapter
 pip install lynx-agent[openai]            # GPT + any OpenAI-compatible provider
 pip install lynx-agent[langgraph]
 pip install lynx-agent[crewai]
+pip install lynx-agent[openai-agents]     # govern the OpenAI Agents SDK (ToolGuard)
 pip install lynx-agent[mcp]
 pip install lynx-agent[otel]              # OpenTelemetry audit sink
 ```
@@ -349,6 +352,27 @@ transform(transform_args={"sql": "..."}, reason="", matched_rules=())
 
 The matched rule id will be `"<default:on_missing_shadow>"` or
 `"<default:on_no_match>"` so you can see the fall-through in audit events.
+
+### Layered policy scopes
+
+For org/team/user-style composition, pass a list of `PolicyLayer` to
+`compile_policy` instead of one source. Each layer is evaluated independently and
+a developer-chosen `Combiner` resolves disagreements:
+
+```python
+from lynx import PolicyLayer, compile_policy, last_layer_wins
+
+bundle = compile_policy(
+    [PolicyLayer("org", org_yaml), PolicyLayer("team", team_yaml), PolicyLayer("user", user_yaml)],
+    merge=last_layer_wins,   # optional; defaults to strict_overrides_loose (fail-closed)
+)
+```
+
+`strict_overrides_loose` (default) takes the most-restrictive verdict;
+`last_layer_wins` lets the most-specific layer re-grant; `first_layer_wins` makes
+the broadest authoritative — or pass your own `Combiner`. Non-matching layers
+abstain; provenance is layer-tagged. Full reference:
+[`docs/02-policy-language.md`](docs/02-policy-language.md#layered-policy-scopes).
 
 ### `run_agent` — all kwargs
 
@@ -667,8 +691,12 @@ ToolSet, or with an agent that isn't a pure function of the conversation
 | 34 | [`34_mcp_proxy.py`](examples/34_mcp_proxy.py) | Govern any MCP server, zero code change |
 | 35 | [`35_multi_provider.py`](examples/35_multi_provider.py) | One policy, any model provider |
 | 36 | [`36_fastmcp_governed.py`](examples/36_fastmcp_governed.py) | Build with FastMCP, govern with Lynx |
+| 37 | [`37_tamper_evident_audit.py`](examples/37_tamper_evident_audit.py) | Hash-chained audit + `verify_chain` |
+| 38 | [`38_otel_audit.py`](examples/38_otel_audit.py) | OpenTelemetry audit sink |
+| 39 | [`39_layered_policy.py`](examples/39_layered_policy.py) | Layered policy scopes + combiners |
+| 40 | [`40_framework_native_governance.py`](examples/40_framework_native_governance.py) | `ToolGuard` — govern a framework's tool calls |
 
-All 36 with one-line descriptions: [`examples/README.md`](examples/README.md).
+All 40 with one-line descriptions: [`examples/README.md`](examples/README.md).
 
 ## CLI — seven commands
 

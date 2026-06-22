@@ -10,8 +10,8 @@ from __future__ import annotations
 import difflib
 import hashlib
 import re
-from collections.abc import Callable, Mapping
-from dataclasses import dataclass, field
+from collections.abc import Callable, Iterable, Mapping, Sequence
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -26,9 +26,13 @@ from lynx.core.types import (
 )
 
 __all__ = [
+    "Combiner",
+    "LayeredPolicyBundle",
+    "Policy",
     "PolicyBundle",
     "PolicyCompileError",
     "PolicyDefaults",
+    "PolicyLayer",
     "PythonRule",
     "allow",
     "approve_required",
@@ -36,7 +40,10 @@ __all__ = [
     "deny",
     "dry_run",
     "evaluate",
+    "first_layer_wins",
+    "last_layer_wins",
     "load_policy_file",
+    "strict_overrides_loose",
     "transform",
 ]
 
@@ -147,6 +154,105 @@ class PolicyBundle:
     # Python rule (and vice versa). Defaults to empty tuple for backward compat;
     # populated by ``compile_policy``.
     eval_order: tuple[_EvalStep, ...] = field(default_factory=tuple)
+
+
+# ---------------------------------------------------------------------------
+# Layered policy scopes
+#
+# Mechanism, not policy: Lynx evaluates each named layer independently and hands
+# the per-layer Decisions to a developer-supplied ``Combiner``. The developer
+# owns the trust model — what the layers are, their order, and how disagreements
+# resolve. We ship a few combiners as batteries; none is privileged. A layer
+# that matches no rule *abstains* (contributes ``None``), so an empty layer never
+# forces a verdict; defaults apply only when every layer abstains.
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class PolicyLayer:
+    """One named layer of a layered policy. ``source`` is YAML text or a dict;
+    ``name`` is any label the developer chooses (e.g. "org", "team", "user")."""
+
+    name: str
+    source: str | Mapping[str, Any]
+    python_rules: tuple[PythonRule, ...] = ()
+
+
+# A Combiner receives every layer's ``(name, Decision | None)`` (None = the layer
+# abstained) and returns the final Decision. It is only ever called with at least
+# one non-None decision — all-abstain is handled by the defaults before merge.
+Combiner = Callable[[tuple[tuple[str, "Decision | None"], ...]], Decision]
+
+
+@dataclass(frozen=True, slots=True)
+class LayeredPolicyBundle:
+    """A bundle of named layers + a developer-chosen merge strategy.
+
+    ``defaults`` is the strictest of the layers' defaults (fail-closed), applied
+    only when every layer abstains.
+    """
+
+    id: str
+    layers: tuple[tuple[str, PolicyBundle], ...]
+    defaults: PolicyDefaults
+    merge: Combiner
+    source_files: tuple[str, ...] = ()
+
+
+# Either kind of compiled policy can be passed to ``evaluate`` / ``run_agent``.
+Policy = PolicyBundle | LayeredPolicyBundle
+
+
+# Severity ladder, most → least restrictive. Used by the shipped combiners and
+# to pick the strictest defaults across layers.
+_VERDICT_SEVERITY: dict[Verdict, int] = {
+    Verdict.DENY: 4,
+    Verdict.APPROVE_REQUIRED: 3,
+    Verdict.DRY_RUN: 2,
+    Verdict.TRANSFORM: 1,
+    Verdict.ALLOW: 0,
+}
+
+
+def _decided(layers: tuple[tuple[str, Decision | None], ...]) -> list[Decision]:
+    return [d for _, d in layers if d is not None]
+
+
+def _with_matched_rules(decision: Decision, matched_rules: tuple[str, ...]) -> Decision:
+    """A copy of ``decision`` with new ``matched_rules`` and every other field
+    preserved. The single point that rebuilds a (frozen) Decision when only its
+    provenance changes — so adding a Decision field never silently drops it from
+    the merge / layer-tag / error-marker paths."""
+    return replace(decision, matched_rules=matched_rules)
+
+
+def _merge_same_verdict(decisions: list[Decision]) -> Decision:
+    """Fold decisions that share one verdict into a single Decision, unioning
+    their (layer-tagged) ``matched_rules`` in order; first decision wins for the
+    scalar fields (reason / approvers / transform_args / timeout)."""
+    matched = tuple(r for d in decisions for r in d.matched_rules)
+    return _with_matched_rules(decisions[0], matched)
+
+
+def strict_overrides_loose(layers: tuple[tuple[str, Decision | None], ...]) -> Decision:
+    """Most-restrictive verdict wins (DENY > APPROVE_REQUIRED > DRY_RUN >
+    TRANSFORM > ALLOW). Broader layers set a floor; narrower layers can only
+    tighten. Ties merge provenance across all winning layers; first layer wins
+    the scalar fields. The fail-closed default combiner."""
+    decided = _decided(layers)
+    top = max(_VERDICT_SEVERITY[d.verdict] for d in decided)
+    return _merge_same_verdict([d for d in decided if _VERDICT_SEVERITY[d.verdict] == top])
+
+
+def last_layer_wins(layers: tuple[tuple[str, Decision | None], ...]) -> Decision:
+    """Most-specific layer is authoritative (CSS-cascade): the last non-abstaining
+    layer's decision wins outright — it can re-grant what a broader layer denied."""
+    return _decided(layers)[-1]
+
+
+def first_layer_wins(layers: tuple[tuple[str, Decision | None], ...]) -> Decision:
+    """Broadest layer is authoritative: the first non-abstaining layer wins."""
+    return _decided(layers)[0]
 
 
 # ---------------------------------------------------------------------------
@@ -488,19 +594,40 @@ def _apply_transform(spec: Mapping[str, Any], req: ActionRequest) -> Mapping[str
 
 
 def compile_policy(
-    source: str | Mapping[str, Any],
+    source: str | Mapping[str, Any] | Sequence[PolicyLayer],
     source_path: str = "<inline>",
     *,
     python_rules: tuple[PythonRule, ...] = (),
     python_rule_priorities: tuple[tuple[str, int], ...] = (),
-) -> PolicyBundle:
+    merge: Combiner | None = None,
+) -> PolicyBundle | LayeredPolicyBundle:
     """Compile YAML (or dict) into a frozen PolicyBundle.
 
     Python rules are passed in explicitly — no module-level registry.
     Each Python rule must be a callable ``(ActionRequest, ExecutionContext) -> Decision | None``.
 
+    Pass a list of :class:`PolicyLayer` instead of a single source to build a
+    :class:`LayeredPolicyBundle`: each layer is compiled independently and the
+    per-layer decisions are combined by ``merge`` (a developer-supplied
+    :data:`Combiner`; defaults to the fail-closed :func:`strict_overrides_loose`).
+
     Raises :class:`PolicyCompileError` for any malformed input.
     """
+    if isinstance(source, (list, tuple)):
+        if not source:
+            raise PolicyCompileError("compile_policy([...]) requires at least one PolicyLayer")
+        if not all(isinstance(x, PolicyLayer) for x in source):
+            raise PolicyCompileError(
+                "layered compile_policy expects a list of PolicyLayer instances"
+            )
+        if python_rules or python_rule_priorities:
+            raise PolicyCompileError(
+                "pass python_rules per layer (PolicyLayer.python_rules), not to "
+                "the layered compile_policy call"
+            )
+        return _compile_layered(tuple(source), merge=merge or strict_overrides_loose)
+    if merge is not None:
+        raise PolicyCompileError("merge= is only valid when compiling a list of PolicyLayer")
     if isinstance(source, str):
         try:
             loaded = yaml.safe_load(source) or {}
@@ -655,6 +782,63 @@ def compile_policy(
     )
 
 
+def _strictest_verdict(verdicts: Iterable[Verdict]) -> Verdict:
+    """The most-restrictive verdict in the iterable (fail-closed default merge)."""
+    return max(verdicts, key=lambda v: _VERDICT_SEVERITY[v])
+
+
+def _compile_layered(
+    layers: tuple[PolicyLayer, ...], *, merge: Combiner
+) -> LayeredPolicyBundle:
+    compiled: list[tuple[str, PolicyBundle]] = []
+    seen: set[str] = set()
+    for layer in layers:
+        if not layer.name:
+            raise PolicyCompileError("PolicyLayer.name must be a non-empty string")
+        if layer.name in seen:
+            raise PolicyCompileError(f"duplicate layer name: {layer.name!r}")
+        seen.add(layer.name)
+        sub = compile_policy(
+            layer.source,
+            source_path=f"<layer:{layer.name}>",
+            python_rules=layer.python_rules,
+        )
+        # Each layer source is a single policy, never itself layered.
+        assert isinstance(sub, PolicyBundle)
+        compiled.append((layer.name, sub))
+
+    # Combined defaults: strictest across layers, so a forgotten layer can never
+    # loosen the floor. Applied only when every layer abstains.
+    combined_defaults = PolicyDefaults(
+        on_missing_shadow=_strictest_verdict(b.defaults.on_missing_shadow for _, b in compiled),
+        on_no_match=_strictest_verdict(b.defaults.on_no_match for _, b in compiled),
+    )
+
+    # Content-addressed id: ordered (layer name, sub-bundle id) + merge identity
+    # + combined defaults. The merge callable is identified by name (like Python
+    # rules) so the id is stable across processes.
+    layered_id = hashlib.sha256(
+        canonical_json(
+            {
+                "layers": [{"name": n, "id": b.id} for n, b in compiled],
+                "merge": getattr(merge, "__name__", repr(merge)),
+                "defaults": {
+                    "on_missing_shadow": combined_defaults.on_missing_shadow.value,
+                    "on_no_match": combined_defaults.on_no_match.value,
+                },
+            }
+        ).encode()
+    ).hexdigest()[:16]
+
+    return LayeredPolicyBundle(
+        id=layered_id,
+        layers=tuple(compiled),
+        defaults=combined_defaults,
+        merge=merge,
+        source_files=tuple(f"<layer:{n}>" for n, _ in compiled),
+    )
+
+
 def _make_yaml_eval(
     rule: CompiledRule,
 ) -> Callable[[ActionRequest, ExecutionContext], Decision | None]:
@@ -720,7 +904,10 @@ def load_policy_file(
         text = p.read_text()
     except OSError as exc:
         raise PolicyCompileError(f"Cannot read policy file {p}: {exc}") from exc
-    return compile_policy(text, source_path=str(p), python_rules=python_rules)
+    bundle = compile_policy(text, source_path=str(p), python_rules=python_rules)
+    # Text source is always a single policy, never layered.
+    assert isinstance(bundle, PolicyBundle)
+    return bundle
 
 
 # ---------------------------------------------------------------------------
@@ -728,18 +915,15 @@ def load_policy_file(
 # ---------------------------------------------------------------------------
 
 
-def evaluate(
+def _run_rules(
     bundle: PolicyBundle,
     request: ActionRequest,
     context: ExecutionContext,
-) -> Decision:
-    """Pure: same (bundle, request, context) always returns the same Decision.
-
-    Python and YAML rules are interleaved by priority. If a rule raises during
-    evaluation it is recorded as a diagnostic marker in ``matched_rules`` (so
-    the scheduler / sinks can surface it) and evaluation continues with the
-    next rule. A buggy rule never silently fails-open.
-    """
+) -> tuple[Decision | None, list[str]]:
+    """Run one bundle's rules in priority order. Returns ``(decision, errors)``
+    where ``decision`` is ``None`` if no rule matched (defaults are NOT applied —
+    that's the caller's job, so a layer can abstain). ``errors`` are diagnostic
+    markers for rules that raised; a buggy rule never silently fails-open."""
     eval_order = bundle.eval_order or _legacy_eval_order(bundle)
     errors: list[str] = []
     for step in eval_order:
@@ -749,27 +933,104 @@ def evaluate(
             errors.append(f"<rule_error:{step.rule_id}:{type(exc).__name__}>")
             continue
         if result is not None:
-            if errors:
-                return Decision(
-                    verdict=result.verdict,
-                    reason=result.reason,
-                    matched_rules=(*errors, *result.matched_rules),
-                    approvers=result.approvers,
-                    transform_args=result.transform_args,
-                    timeout_seconds=result.timeout_seconds,
-                )
-            return result
+            return result, errors
+    return None, errors
 
+
+def evaluate(
+    bundle: PolicyBundle | LayeredPolicyBundle,
+    request: ActionRequest,
+    context: ExecutionContext,
+) -> Decision:
+    """Pure: same (bundle, request, context) always returns the same Decision.
+
+    For a single bundle, Python and YAML rules are interleaved by priority. For a
+    :class:`LayeredPolicyBundle`, each layer is evaluated independently and the
+    results combined by the bundle's ``merge`` strategy.
+    """
+    if isinstance(bundle, LayeredPolicyBundle):
+        return _evaluate_layered(bundle, request, context)
+
+    result, errors = _run_rules(bundle, request, context)
+    if result is not None:
+        if errors:
+            return _with_matched_rules(result, (*errors, *result.matched_rules))
+        return result
+
+    return _apply_defaults(
+        bundle.defaults,
+        request,
+        errors=tuple(errors),
+        missing_shadow_reason="irreversible action with no shadow; default policy",
+        no_match_reason="no rule matched; default policy",
+    )
+
+
+def _apply_defaults(
+    defaults: PolicyDefaults,
+    request: ActionRequest,
+    *,
+    errors: tuple[str, ...],
+    missing_shadow_reason: str,
+    no_match_reason: str,
+) -> Decision:
+    """The fail-closed default when nothing matched, shared by the single-bundle
+    and layered paths so the safety floor can never drift between them: the
+    ``on_missing_shadow`` floor when the action is neither reversible nor
+    previewable, else ``on_no_match``."""
     if not request.declared.reversible and not request.declared.has_shadow:
         return Decision(
-            verdict=bundle.defaults.on_missing_shadow,
-            reason="irreversible action with no shadow; default policy",
+            verdict=defaults.on_missing_shadow,
+            reason=missing_shadow_reason,
             matched_rules=(*errors, "<default:on_missing_shadow>"),
         )
     return Decision(
-        verdict=bundle.defaults.on_no_match,
-        reason="no rule matched; default policy",
+        verdict=defaults.on_no_match,
+        reason=no_match_reason,
         matched_rules=(*errors, "<default:on_no_match>"),
+    )
+
+
+def _evaluate_layered(
+    bundle: LayeredPolicyBundle,
+    request: ActionRequest,
+    context: ExecutionContext,
+) -> Decision:
+    """Evaluate each layer independently, layer-tag its provenance, and hand the
+    per-layer decisions to the developer's ``merge`` combiner. A layer that
+    matches no rule abstains (``None``); defaults apply only if every layer
+    abstains. Rule-error markers are layer-tagged and threaded into the result."""
+    layer_results: list[tuple[str, Decision | None]] = []
+    errors: list[str] = []
+    for name, sub in bundle.layers:
+        result, sub_errors = _run_rules(sub, request, context)
+        errors.extend(f"{name}:{e}" for e in sub_errors)
+        if result is None:
+            layer_results.append((name, None))
+        else:
+            layer_results.append((name, _tag_layer(name, result)))
+
+    if all(decision is None for _, decision in layer_results):
+        return _apply_defaults(
+            bundle.defaults,
+            request,
+            errors=tuple(errors),
+            missing_shadow_reason=(
+                "irreversible action with no shadow; no layer matched; default policy"
+            ),
+            no_match_reason="no layer matched; default policy",
+        )
+
+    final = bundle.merge(tuple(layer_results))
+    if errors:
+        return _with_matched_rules(final, (*errors, *final.matched_rules))
+    return final
+
+
+def _tag_layer(name: str, decision: Decision) -> Decision:
+    """Prefix each matched-rule id with the layer name for audit provenance."""
+    return _with_matched_rules(
+        decision, tuple(f"{name}:{r}" for r in decision.matched_rules)
     )
 
 
