@@ -53,6 +53,10 @@ A YAML document plus optional Python rules, compiled into a `PolicyBundle`. The 
 
 Frozen, immutable. The `id` is a deterministic hash over the full compiled content — two policies that differ only in a rule's body produce different IDs, even when the rule names match. Surfaced in every event for attestation.
 
+## PolicyLayer / LayeredPolicyBundle / Combiner
+
+A `PolicyLayer` is one named policy (e.g. `"org"`, `"team"`, `"user"`). Pass a list of them to `compile_policy` and you get a `LayeredPolicyBundle`: each layer is evaluated independently, then a `Combiner` — `Callable[[tuple[tuple[str, Decision | None], ...]], Decision]` — resolves disagreements into one `Decision`. Lynx ships `strict_overrides_loose` (default, fail-closed), `last_layer_wins`, and `first_layer_wins`; you can supply any. A layer that matches no rule **abstains** (`None`), so it never forces a verdict; defaults apply only when every layer abstains. `Policy` is the union `PolicyBundle | LayeredPolicyBundle` — either is accepted by `evaluate` / `run_agent` / `ToolGuard`. Mechanism, not policy: Lynx evaluates the layers; the developer owns precedence.
+
 ## PDP
 
 The Policy Decision Point: `evaluate(bundle, request, context) -> Decision`. Pure function. Same inputs → same Decision. No I/O.
@@ -151,6 +155,18 @@ A **proxy** interposes Lynx on a transport an existing client already speaks —
 - **Transport** — `serve_mcp_proxy(upstream, policy=…, sinks=…)` runs the stdio server (downstream) + client (upstream), re-exporting upstream tool schemas verbatim. Requires `pip install lynx-agent[mcp]`.
 
 Runnable: [`examples/34_mcp_proxy.py`](../examples/34_mcp_proxy.py) — reads allowed, writes previewed, deletes blocked, with the audit stream printed. [`examples/36_fastmcp_governed.py`](../examples/36_fastmcp_governed.py) does the same in front of a server built with FastMCP (the decorator API bundled in the `mcp` SDK).
+
+## ToolGuard / framework-native integration (optional)
+
+The third interposition mode, alongside **adapters** and the **MCP proxy**, distinguished by *who owns the agent loop*:
+
+- **Adapter** (`lynx.adapters`) — Lynx drives the loop: you wrap an LLM as an `Agent` and call `run_agent`.
+- **MCP proxy** (`lynx.proxy`) — an MCP client drives it: Lynx sits on the transport.
+- **Integration** (`lynx.integrations`) — an agent *framework* drives it (OpenAI Agents SDK, LangChain, CrewAI, PydanticAI): Lynx governs each tool call *inside* the framework's loop.
+
+`ToolGuard` is the framework-agnostic primitive for the third mode. Constructed with the same inputs as `run_agent` (tools, policy, principal, approval handler, executor, sinks), it exposes `await check(tool_name, args) -> GovernedCall`. `check` builds an `ActionRequest`, runs the pure PDP, emits `step.proposed` / `policy.evaluated` / outcome [events](#event-kinds), and enforces the verdict through the same `mediate` path as `run_agent` — so all five verdicts behave identically and unknown tools fail closed. A `GovernedCall` carries the `decision` (layer-tagged provenance), the `result` (`ActionResult`), and the convenience `allowed` flag. Each per-framework shim (e.g. `governed_function_tools` for the OpenAI Agents SDK) is a thin optional extra; `ToolGuard` itself is stdlib-only.
+
+Runnable: [`examples/40_framework_native_governance.py`](../examples/40_framework_native_governance.py). Wiring recipes: [`integration-cookbook.md`](integration-cookbook.md#governing-an-existing-agent-framework--toolguard).
 
 ## OpenAI-compatible providers
 

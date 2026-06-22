@@ -56,8 +56,11 @@ something demoable.
      Grok (xAI), Mistral, DeepSeek, Groq, OpenRouter, Together, Fireworks,
      Perplexity, Ollama through one `OpenAIAgent` + `openai_compatible_agent()`;
      one policy governs every provider. *(Landed: example 35, tests.)*
-   - ⬜ **Claude Agent SDK + OpenAI Agents SDK** adapters; keep all adapters
-     genuinely 3-line.
+   - 🟡 **Framework-native governance** (`lynx.integrations`): `ToolGuard`
+     governs tool calls when the *framework* owns the loop (inverse of an
+     adapter). ✅ OpenAI Agents SDK shim (`governed_function_tools`) shipped
+     (example 40, tests); ⬜ LangChain / PydanticAI / Google ADK shims and a
+     native-HITL bridge still to come — the top adoption lever.
 3. ✅ **OTel sink** (`otel_sink`) — **shipped.** Each `AuditEvent` → one
    OpenTelemetry span (`lynx.*` attributes), stateless, nests under the ambient
    trace; optional `[otel]` extra. *(Example 38, tests.)*
@@ -66,9 +69,12 @@ something demoable.
 
 Goal: *deployable in a regulated company*.
 
-4. **Layered policy scopes** — `compile_policy([org, team, user], …)` with
-   strict-overrides-loose merge + layer provenance in `matched_rules`. Highest-
-   value core change.
+4. ✅ **Layered policy scopes** — **shipped.** `compile_policy([PolicyLayer(…),
+   …])` evaluates each named layer independently and hands the decisions to a
+   developer-chosen `Combiner`. Ships `strict_overrides_loose` (default,
+   fail-closed), `last_layer_wins`, and `first_layer_wins`; layers that don't
+   match abstain; provenance is layer-tagged in `matched_rules`. Mechanism, not
+   policy — you choose who overrides whom. *(Example 39, tests, docs.)*
 5. **Shipped seam batteries** — `docker_executor` / `e2b_executor`; reference
    `PostgresRunStore` + `RedisRunStore`.
 6. **Durable / async approvals** — approval queue + resume tied to `RunStore`

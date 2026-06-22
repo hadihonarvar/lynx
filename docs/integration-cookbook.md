@@ -6,6 +6,67 @@ Wiring patterns for plugging your storage / observability / approval systems int
 
 ---
 
+## Governing an existing agent framework — `ToolGuard`
+
+There are three ways to interpose Lynx, depending on **who owns the agent loop**:
+
+| Who drives the loop | Use | Import |
+|---|---|---|
+| **Lynx** drives it | an **adapter** — wrap your LLM as a Lynx `Agent`, then `run_agent(...)` | `lynx.adapters.*` (`ClaudeAgent`, `OpenAIAgent`, `LangGraphAgent`, `CrewAIAgent`) |
+| An **MCP client** drives it | the **MCP proxy** — sit in front of any MCP server | `serve_mcp_proxy` / `GovernedProxy` |
+| An **agent framework** drives it | a **framework-native integration** — drop `ToolGuard` in front of its tool calls | `lynx.integrations.*` |
+
+The third case is the common one when you already run inside the OpenAI Agents SDK, LangChain, CrewAI, or PydanticAI and don't want to restructure around `run_agent`. `ToolGuard` is the framework-agnostic primitive: build it once with the same inputs as `run_agent`, then call `check()` from inside the framework's native tool hook. It reuses the exact kernel path (`evaluate` → `mediate`), so every verdict behaves identically to a `run_agent` call — unknown tools fail closed and never execute.
+
+```python
+from lynx import ToolGuard, ToolSet, compile_policy, Principal
+
+guard = ToolGuard(
+    tools=ToolSet.from_functions(search, refund),     # your @tool functions
+    policy=compile_policy(open("policy.yaml").read()), # or a LayeredPolicyBundle
+    principal=Principal(kind="user", id="agent-7"),
+    on_approval=my_approval_handler,                   # same handler as run_agent
+    sinks=(my_sink,),                                  # same audit stream
+)
+
+call = await guard.check("refund", {"amount": 5000})
+# call.decision -> the PDP verdict (layer-tagged matched_rules)
+# call.result   -> ActionResult: tool output on allow/transform/approved,
+#                  a denial on deny/refused, the shadow preview on dry_run
+# call.allowed  -> bool (did it execute/preview ok?)
+```
+
+### OpenAI Agents SDK (one line)
+
+`governed_function_tools` turns a `ToolSet` into governed `function_tool`s. The SDK keeps driving the loop; each tool it calls is routed through the `ToolGuard` above. Verdict mapping the model sees:
+
+| Verdict | What the SDK tool returns |
+|---|---|
+| `allow` / `transform` / approved | the real tool's output (transformed args applied first) |
+| `deny` / refused / timed out | a `[denied] …` string the model can read and react to |
+| `dry_run` | the shadow preview (no side effect) |
+| `approve_required` | resolved by the guard's `on_approval` handler |
+
+```python
+from agents import Agent, Runner
+from lynx.integrations.openai_agents import governed_function_tools
+
+agent = Agent(
+    name="support",
+    instructions="Help the user; use tools.",
+    tools=governed_function_tools(tools, policy=policy, on_approval=my_approval_handler),
+)
+result = await Runner.run(agent, "refund order 123 for $5000")
+```
+
+`pip install lynx-agent[openai-agents]` for the SDK shim — `ToolGuard` itself is stdlib-only. See [`examples/40_framework_native_governance.py`](../examples/40_framework_native_governance.py).
+
+### Any other framework (the general shape)
+
+Wherever the framework lets you intercept a tool call — a LangChain callback, a CrewAI tool wrapper, a PydanticAI tool function — call `guard.check(name, args)` and translate the `GovernedCall` into that framework's control flow: return `call.result.value` when `call.allowed`, otherwise surface the denial (`call.result.error`) however the framework expects (return a string, raise, or trigger its own approval UI). The same `ToolGuard` governs them all with one policy and one audit stream.
+
+---
+
 ## Sinks — where AuditEvents go
 
 A `Sink` is `async def __call__(event: AuditEvent) -> None`. Five to ten lines of glue is usually enough.

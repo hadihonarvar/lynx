@@ -1,9 +1,13 @@
 """Top-level re-exports for the policy module."""
 
 from lynx.core.policy import (
+    Combiner,
+    LayeredPolicyBundle,
+    Policy,
     PolicyBundle,
     PolicyCompileError,
     PolicyDefaults,
+    PolicyLayer,
     PythonRule,
     allow,
     approve_required,
@@ -11,14 +15,21 @@ from lynx.core.policy import (
     deny,
     dry_run,
     evaluate,
+    first_layer_wins,
+    last_layer_wins,
     load_policy_file,
+    strict_overrides_loose,
     transform,
 )
 
 __all__ = [
+    "Combiner",
+    "LayeredPolicyBundle",
+    "Policy",
     "PolicyBundle",
     "PolicyCompileError",
     "PolicyDefaults",
+    "PolicyLayer",
     "PythonRule",
     "allow",
     "approve_required",
@@ -26,6 +37,9 @@ __all__ = [
     "deny",
     "dry_run",
     "evaluate",
+    "first_layer_wins",
+    "last_layer_wins",
     "load_policy_file",
+    "strict_overrides_loose",
     "transform",
 ]

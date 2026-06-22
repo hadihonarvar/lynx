@@ -44,7 +44,7 @@ from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 import yaml
 
-from lynx.core.policy import PolicyBundle, _compile_safe_regex
+from lynx.core.policy import LayeredPolicyBundle, PolicyBundle, _compile_safe_regex
 from lynx.core.scheduler import run_agent
 from lynx.core.types import (
     AuditEvent,
@@ -102,7 +102,7 @@ class GraphNode:
 
     agent: Agent
     tools: ToolSet
-    policy: PolicyBundle
+    policy: PolicyBundle | LayeredPolicyBundle
     budget: Budget = field(default_factory=Budget)  # unlimited unless you cap it
     on_approval: ApprovalHandler | None = None
 

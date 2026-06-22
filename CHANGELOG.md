@@ -7,6 +7,48 @@ All notable changes to Lynx will be documented here. Format follows [Keep a Chan
 ### Added
 - (nothing yet)
 
+## [2.10.0] — 2026-06-21
+
+### Added
+- **Framework-native governance (`ToolGuard` + integrations).** A new
+  `lynx.integrations` module governs individual tool calls when an *agent
+  framework* owns the loop (OpenAI Agents SDK, LangChain, CrewAI, PydanticAI),
+  the inverse of `lynx.adapters` (which wrap an LLM so Lynx drives the loop).
+  `ToolGuard` is the framework-agnostic primitive: construct it with the same
+  inputs as `run_agent` (tools, policy, principal, approval handler, executor,
+  sinks) and call `await guard.check(tool_name, args)` from inside the
+  framework's native tool hook. It reuses the exact kernel path
+  (`evaluate` → `mediate`), so a call governed through a framework gets the same
+  five-verdict semantics and executor routing as one governed through
+  `run_agent`, and emits `step.proposed` / `policy.evaluated` / outcome audit
+  events; unknown tools fail closed and never execute. The
+  first shim, `lynx.integrations.openai_agents.governed_function_tools(...)`,
+  turns a `ToolSet` into governed OpenAI Agents SDK `function_tool`s in one line
+  (ALLOW/TRANSFORM/approved → the real tool runs; DENY/refused → a `[denied] …`
+  string the model can read; DRY_RUN → the shadow preview; APPROVE_REQUIRED →
+  the guard's `on_approval`). Each framework shim is an optional guarded-import
+  extra (`pip install lynx-agent[openai-agents]`), so core deps stay
+  click/pyyaml/rich and the PDP stays pure. New public exports: `ToolGuard`,
+  `GovernedCall`. *(Example 40, tests.)*
+- **Layered policy scopes.** `compile_policy([PolicyLayer("org", ...),
+  PolicyLayer("team", ...), ...])` compiles a `LayeredPolicyBundle`: each named
+  layer is evaluated independently and the per-layer decisions are handed to a
+  developer-chosen `Combiner` that returns the final `Decision`. Three batteries
+  ship, none privileged — `strict_overrides_loose` (the default; most-restrictive
+  verdict wins, fail-closed), `last_layer_wins` (most-specific layer is
+  authoritative, CSS-cascade), and `first_layer_wins` (broadest layer wins);
+  bring your own for any trust model. A layer that matches no rule **abstains**
+  (never forces a verdict); defaults apply only when every layer abstains and the
+  combined default is the strictest across layers, so a forgotten layer can never
+  loosen the floor. Provenance in `matched_rules` is layer-tagged
+  (`"team:block-http"`), including rule-error markers. Per-layer Python rules go
+  on `PolicyLayer(..., python_rules=...)`. A single source still compiles to a
+  plain `PolicyBundle` — fully backward compatible. New public exports:
+  `PolicyLayer`, `LayeredPolicyBundle`, `Combiner`, `Policy`,
+  `strict_overrides_loose`, `last_layer_wins`, `first_layer_wins`. Mechanism, not
+  policy: Lynx evaluates the layers; you decide who overrides whom. *(Example 39,
+  tests, docs.)*
+
 ## [2.9.0] — 2026-06-20
 
 ### Added

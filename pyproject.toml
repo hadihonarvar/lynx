@@ -64,6 +64,7 @@ dev = [
 ]
 anthropic = ["anthropic>=0.30"]
 openai = ["openai>=1.40"]
+openai-agents = ["openai-agents>=0.1"]
 langgraph = ["langgraph>=0.2"]
 crewai = ["crewai>=0.40"]
 mcp = ["mcp>=1.0"]
@@ -71,6 +72,7 @@ otel = ["opentelemetry-api>=1.20"]
 all = [
     "anthropic>=0.30",
     "openai>=1.40",
+    "openai-agents>=0.1",
     "langgraph>=0.2",
     "crewai>=0.40",
     "mcp>=1.0",
@@ -129,6 +131,12 @@ strict = true
 warn_return_any = true
 warn_unused_ignores = true
 disallow_untyped_defs = true
+
+# Optional integration extras that ship no type stubs. Imported lazily behind a
+# guarded import, so the missing-stub error is noise, not a real type hole.
+[[tool.mypy.overrides]]
+module = ["agents.*"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

@@ -15,7 +15,7 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
 from lynx.core.mediator import mediate
-from lynx.core.policy import PolicyBundle, evaluate
+from lynx.core.policy import LayeredPolicyBundle, PolicyBundle, evaluate
 from lynx.core.types import (
     ActionRequest,
     ActionResult,
@@ -83,7 +83,7 @@ async def run_agent(
     task: str,
     *,
     tools: ToolSet,
-    policy: PolicyBundle,
+    policy: PolicyBundle | LayeredPolicyBundle,
     sinks: Sequence[Sink] = (),
     on_approval: ApprovalHandler | None = None,
     budget: Budget = Budget(),  # unlimited — only caps you set are enforced
