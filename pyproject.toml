@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "lynx-agent"
-description = "A stateless, type-safe policy kernel for AI agent tool calls. Pure functions, immutable values, streaming events to user-owned sinks. No database. No globals."
+description = "Policy-gated, durable, audited execution for AI agent tool calls. Every action gets a five-verdict policy check, a crash-safe checkpoint, and a tamper-evident audit event — a library, not a server."
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE"]

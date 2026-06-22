@@ -19,6 +19,16 @@ where being *in the loop on every action* is the whole point:
 - **Enforcement on every action** — a policy gate with five verdicts (allow /
   deny / dry-run / approve / transform). Not observation after the fact:
   the action cannot run unless policy lets it.
+- **Works whether Lynx drives the loop or the framework does** — run an
+  **adapter** (`lynx.adapters`) to let `run_agent` drive any LLM, *or* drop a
+  `ToolGuard` (`lynx.integrations`) into a framework that owns its own loop
+  (OpenAI Agents SDK, LangChain, CrewAI, PydanticAI). Both reuse the exact same
+  `evaluate → mediate` kernel, so the five-verdict boundary is identical either
+  way — Lynx governs the action, not the agent framework's design.
+- **Layered policy scopes** — compose independent org / team / user policies,
+  each evaluated on its own, then merged by a developer-chosen `Combiner`
+  (fail-closed by default). Lynx owns the *mechanism*; you own the trust model
+  (who overrides whom). Provenance is layer-tagged in the audit.
 - **Human-in-the-loop** — approvals with enforced timeouts; previews before
   irreversible actions.
 - **Durable execution** — crash-resume, idempotency, no double side effects;

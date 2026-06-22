@@ -15,7 +15,7 @@ See the [integration cookbook](integration-cookbook.md) for ready-to-paste recip
 
 ### Can I get a hash-chained audit chain?
 
-Not yet — a tamper-evident, hash-chained (optionally signed) audit sink is on the roadmap. Today, wire `jsonl_sink` or your own sink to persist the event stream.
+Yes — shipped in 2.9.0. Wrap any sink with `hash_chained_sink(...)`: each event carries the SHA-256 of the previous one, so a deleted or altered event breaks the chain. Verify after the fact with `verify_chain(events)` or the `lynx verify` CLI command. Ed25519 signing of the chain head is the next tier (still on the roadmap). See `examples/37_tamper_evident_audit.py`.
 
 ### How do I do cross-process approval (Slack, web UI)?
 
@@ -98,6 +98,14 @@ async with mcp_tools("python -m my_mcp_server") as remote:
 ```
 
 No global registration. The MCP defaults are conservative (`reversible=False`, scope `mcp:tool`) so policies must explicitly allow them.
+
+### Does Lynx work with the OpenAI Agents SDK / LangChain / CrewAI / PydanticAI?
+
+Yes — two ways, depending on who drives the loop. If you want **Lynx** to drive, use an **adapter** (`lynx.adapters`) that wraps the LLM and run it through `run_agent`. If you want the **framework** to keep driving its own loop, use **framework-native governance** (`lynx.integrations`): drop a `ToolGuard` in front of the framework's tool calls. `await guard.check(tool_name, args)` runs the exact same `evaluate → mediate` kernel and returns a `GovernedCall`, so all five verdicts work at the boundary — no proxy, no rewrite. For the OpenAI Agents SDK specifically, `governed_function_tools(tools, policy=…)` turns a `ToolSet` into governed `function_tool`s in one line. `ToolGuard` itself is stdlib-only; the SDK shim is an optional extra (`pip install lynx-agent[openai-agents]`). See `examples/40_framework_native_governance.py`.
+
+### How do I layer org / team / user policies?
+
+Compile a list of `PolicyLayer`s instead of one source: `compile_policy([PolicyLayer("org", …), PolicyLayer("team", …), PolicyLayer("user", …)])`. Each layer is evaluated independently and the per-layer decisions are merged by a developer-chosen `Combiner`. Ships `strict_overrides_loose` (default, fail-closed — a broad layer sets a floor narrower layers can only tighten), `last_layer_wins` (most-specific layer may re-grant), and `first_layer_wins` — or pass your own for any trust model. A layer that matches no rule abstains; provenance is layer-tagged (`team:block-http`) in the audit. Mechanism, not policy: Lynx evaluates the layers, you decide who overrides whom. See [`02-policy-language.md`](02-policy-language.md#layered-policy-scopes) and `examples/39_layered_policy.py`.
 
 ### How do I file a security issue?
 

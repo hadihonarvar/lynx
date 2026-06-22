@@ -236,3 +236,49 @@ rules:
       declared.reversible: true
     decision: allow
 ```
+
+## Layer org / team / user policies
+
+Compose independent policies instead of merging them into one file. Each layer
+is evaluated on its own; a developer-chosen `Combiner` resolves disagreements.
+The default `strict_overrides_loose` is fail-closed — a broad layer sets a floor
+narrower layers can only tighten.
+
+```python
+from lynx import compile_policy, PolicyLayer
+
+org = """
+rules:
+  - id: org-no-prod-deletes
+    priority: 100
+    match: { context.environment: prod, args.cmd.matches: '(?i)\\b(rm|drop|delete)\\b' }
+    decision: deny
+    reason: "org policy: no destructive ops in prod"
+"""
+
+team = """
+rules:
+  - id: team-allow-shell-reads
+    match: { tool: shell, args.cmd.matches: '^(ls|cat|grep)\\s' }
+    decision: allow
+"""
+
+# Default Combiner = strict_overrides_loose (fail-closed). The org DENY wins
+# over any team ALLOW for the same action; a layer that matches no rule abstains.
+bundle = compile_policy([
+    PolicyLayer("org", org),
+    PolicyLayer("team", team),
+])
+# Matched rules are layer-tagged in the audit, e.g. "org:org-no-prod-deletes".
+```
+
+Swap the merge strategy when a more-specific layer should be authoritative:
+
+```python
+from lynx import last_layer_wins   # most-specific layer may re-grant
+
+bundle = compile_policy(
+    [PolicyLayer("org", org), PolicyLayer("user", user)],
+    merge=last_layer_wins,
+)
+```

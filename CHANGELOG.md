@@ -7,6 +7,27 @@ All notable changes to Lynx will be documented here. Format follows [Keep a Chan
 ### Added
 - (nothing yet)
 
+## [2.10.1] — 2026-06-22
+
+Documentation and packaging metadata only — no code or behavior changes.
+
+### Changed
+- **Unified tagline across PyPI + GitHub.** The package description now reads
+  "Policy-gated, durable, audited execution for AI agent tool calls…" on both
+  surfaces (previously the two disagreed).
+- **README gains a Documentation index** linking all seven docs, and the GitHub
+  repo topics were refreshed for discoverability (`guardrails`, `governance`,
+  `human-in-the-loop`, `openai-agents`, `ai-safety`).
+
+### Fixed
+- **`docs/faq.md`** corrected a stale answer that claimed the hash-chained audit
+  sink was "not yet" available — it shipped in 2.9.0 (`hash_chained_sink` /
+  `verify_chain` / `lynx verify`). Added FAQ entries for framework-native
+  governance (`ToolGuard` / OpenAI Agents SDK) and layered policy scopes.
+- **`docs/what-lynx-is-and-isnt.md`** now lists framework-native governance and
+  layered policy scopes in the defensible core.
+- **`docs/cookbook.md`** adds a layered org/team/user policy recipe.
+
 ## [2.10.0] — 2026-06-21
 
 ### Added

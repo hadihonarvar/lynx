@@ -1,7 +1,7 @@
 # Lynx
 
-[![PyPI](https://img.shields.io/pypi/v/lynx-agent.svg?v=2.10.0)](https://pypi.org/project/lynx-agent/)
-[![Python versions](https://img.shields.io/pypi/pyversions/lynx-agent.svg?v=2.10.0)](https://pypi.org/project/lynx-agent/)
+[![PyPI](https://img.shields.io/pypi/v/lynx-agent.svg?v=2.10.1)](https://pypi.org/project/lynx-agent/)
+[![Python versions](https://img.shields.io/pypi/pyversions/lynx-agent.svg?v=2.10.1)](https://pypi.org/project/lynx-agent/)
 [![License](https://img.shields.io/pypi/l/lynx-agent.svg)](https://github.com/hadihonarvar/lynx/blob/main/LICENSE)
 [![CI](https://github.com/hadihonarvar/lynx/actions/workflows/ci.yml/badge.svg)](https://github.com/hadihonarvar/lynx/actions/workflows/ci.yml)
 
@@ -104,6 +104,18 @@ pip install lynx-agent
 lynx init           # writes one file: policy.yaml
 python examples/01_hello_allow.py
 ```
+
+## Documentation
+
+| Doc | What's in it |
+|---|---|
+| [`docs/concepts.md`](docs/concepts.md) | The model end-to-end: the loop, the five verdicts, every seam, and how they compose |
+| [`docs/02-policy-language.md`](docs/02-policy-language.md) | Full policy reference — YAML schema, operators, Python rules, layered scopes |
+| [`docs/cookbook.md`](docs/cookbook.md) | Copy-pasteable policy patterns (block `rm -rf`, tiered approvals, layered org/team/user) |
+| [`docs/integration-cookbook.md`](docs/integration-cookbook.md) | Wiring recipes — sinks (SQLite/Postgres/OTel/Splunk/HTTP), durability stores, Slack approvals, `ToolGuard` in your framework |
+| [`docs/what-lynx-is-and-isnt.md`](docs/what-lynx-is-and-isnt.md) | The boundary Lynx owns vs. what to compose it with |
+| [`docs/faq.md`](docs/faq.md) | Common questions — performance, MCP, framework support, hot-reload, cleanup |
+| [`docs/roadmap.md`](docs/roadmap.md) | Shipped vs. planned, by phase |
 
 ## How it works
 
