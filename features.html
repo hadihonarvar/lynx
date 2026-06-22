@@ -1,0 +1,1106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Lynx — features, visualized</title>
+<meta name="description" content="Every Lynx feature, shown as a live animation: the five verdicts, obligations, layered policy, budgets, durable resume, tamper-evident audit, the executor & compressor seams, and handoff graphs." />
+<style>
+  :root{
+    --bg:#0b0d10; --bg2:#0d1014; --panel:#161a21; --line:#232a34;
+    --ink:#e8edf4; --muted:#9aa6b6; --faint:#6b7686;
+    --accent:#f5a623; --accent2:#5cc8ff; --green:#51d88a; --red:#ff6b6b; --violet:#b08cff;
+    --mono:"SF Mono","JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.6;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent2);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 26px}
+  code{font-family:var(--mono);color:var(--ink);background:rgba(255,255,255,.04);padding:1px 6px;border-radius:5px;font-size:.92em}
+
+  /* nav */
+  nav{position:sticky;top:0;z-index:50;backdrop-filter:blur(12px);background:rgba(11,13,16,.72);border-bottom:1px solid var(--line)}
+  nav .wrap{display:flex;align-items:center;justify-content:space-between;height:60px}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:700}
+  .brand .dot{width:11px;height:11px;border-radius:50%;background:var(--accent);box-shadow:0 0 14px var(--accent)}
+  .navlinks{display:flex;gap:20px;align-items:center;font-size:14px}
+  .navlinks a{color:var(--muted)} .navlinks a:hover{color:var(--ink);text-decoration:none}
+  .navlinks .ghbtn{color:var(--ink);border:1px solid var(--line);padding:6px 14px;border-radius:8px}
+  @media(max-width:880px){.navlinks .hideSm{display:none}}
+
+  /* hero */
+  header.hero{position:relative;height:88vh;min-height:560px;overflow:hidden;display:flex;align-items:center}
+  #hero-canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+  .hero-grad{position:absolute;inset:0;pointer-events:none;
+    background:radial-gradient(60% 60% at 50% 40%,transparent,rgba(11,13,16,.4) 70%,var(--bg) 100%)}
+  .hero-inner{position:relative;z-index:2;width:100%}
+  .eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;letter-spacing:.6px;text-transform:uppercase;
+    color:var(--accent);border:1px solid rgba(245,166,35,.32);background:rgba(245,166,35,.06);padding:5px 12px;border-radius:999px}
+  h1{font-size:clamp(36px,6.4vw,64px);line-height:1.03;margin:22px 0 0;letter-spacing:-1.5px}
+  h1 .grad{background:linear-gradient(92deg,var(--accent),#ffd27a);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .lede{font-size:clamp(17px,2.2vw,21px);color:var(--muted);max-width:640px;margin:20px 0 0}
+  .cta{display:flex;flex-wrap:wrap;gap:13px;margin-top:30px}
+  .btn{display:inline-flex;align-items:center;gap:8px;font-weight:600;font-size:15px;padding:12px 20px;border-radius:10px;border:1px solid transparent;cursor:pointer}
+  .btn.primary{background:var(--accent);color:#1a1206} .btn.primary:hover{background:#ffb845;text-decoration:none}
+  .btn.ghost{border-color:var(--line);color:var(--ink);background:var(--bg2)} .btn.ghost:hover{border-color:#34404f;text-decoration:none}
+  .scrollhint{position:absolute;bottom:22px;left:50%;transform:translateX(-50%);z-index:2;color:var(--faint);font-size:12px;letter-spacing:.5px;text-transform:uppercase}
+
+  /* feature rows */
+  .feature{padding:74px 0;border-top:1px solid var(--line)}
+  .feature .wrap{display:grid;grid-template-columns:0.92fr 1.08fr;gap:54px;align-items:center}
+  @media(max-width:860px){
+    .feature .wrap{grid-template-columns:1fr;gap:26px}
+  }
+  .kicker{color:var(--accent);font-size:12.5px;font-weight:700;letter-spacing:.9px;text-transform:uppercase;display:flex;align-items:center;gap:10px}
+  .kicker .num{font-family:var(--mono);color:var(--faint);font-weight:600}
+  .badge{font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--accent);
+    border:1px solid rgba(245,166,35,.4);background:rgba(245,166,35,.08);border-radius:5px;padding:1px 7px}
+  .desc h2{font-size:clamp(25px,3.4vw,33px);margin:14px 0 0;letter-spacing:-.5px}
+  .desc p{color:var(--muted);font-size:16px;margin:14px 0 0}
+  .desc p b{color:var(--ink);font-weight:600}
+  .tags{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+  .tag{font-family:var(--mono);font-size:12px;color:var(--muted);border:1px solid var(--line);background:var(--panel);border-radius:7px;padding:4px 9px}
+  .snip{margin-top:14px;overflow-x:auto;font-family:var(--mono);font-size:12.5px;
+    line-height:1.65;color:var(--ink);white-space:pre}
+  .snip .c{color:var(--faint)}
+
+  .visual{position:relative}
+  .visual canvas{width:100%;aspect-ratio:600/420;display:block;border-radius:16px;border:1px solid var(--line);
+    background:var(--bg2);box-shadow:0 20px 60px rgba(0,0,0,.35)}
+  .cap{margin-top:10px;font-family:var(--mono);font-size:12px;color:var(--faint);text-align:center}
+
+  footer{border-top:1px solid var(--line);padding:48px 0 70px;color:var(--faint);font-size:13.5px}
+  footer .wrap{display:flex;justify-content:space-between;flex-wrap:wrap;gap:16px}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap">
+    <div class="brand"><span class="dot"></span> Lynx · features</div>
+    <div class="navlinks">
+      <a href="#f-verdicts" class="hideSm">Verdicts</a>
+      <a href="#f-obligations" class="hideSm">Obligations</a>
+      <a href="#f-layers" class="hideSm">Policy</a>
+      <a href="#f-durable" class="hideSm">Durability</a>
+      <a href="#f-graph" class="hideSm">Graphs</a>
+      <a href="#f-mcp" class="hideSm">MCP</a>
+      <a class="ghbtn" href="https://github.com/hadihonarvar/lynx">GitHub ↗</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <canvas id="hero-canvas"></canvas>
+  <div class="hero-grad"></div>
+  <div class="hero-inner">
+    <div class="wrap">
+      <span class="eyebrow">● every feature, animated</span>
+      <h1>See the <span class="grad">governance kernel</span><br>actually work.</h1>
+      <p class="lede">Each Lynx capability below is a live diagram — the five verdicts, obligations, layered policy, budgets, crash-resume, the audit chain, the seams, and handoff graphs. Scroll: description on the left, the mechanism moving on the right.</p>
+      <div class="cta">
+        <a class="btn primary" href="#f-loop">Start scrolling ↓</a>
+        <a class="btn ghost" href="https://pypi.org/project/lynx-agent/">pip install lynx-agent</a>
+      </div>
+    </div>
+  </div>
+  <div class="scrollhint">scroll to explore ↓</div>
+</header>
+
+<!-- 1 LOOP -->
+<section class="feature" id="f-loop">
+  <div class="wrap">
+    <div class="desc">
+      <div class="kicker"><span class="num">01</span> The chokepoint</div>
+      <h2>One gate on the one dangerous moment</h2>
+      <p>An agent harness is a loop: the model proposes a tool call, something runs it, the result feeds back. Lynx isn't the loop — it <b>clamps onto the single point</b> where a proposed call is about to touch the world, and runs <code>evaluate → mediate</code> on every one.</p>
+      <p>Pure functions over immutable values. No database, no globals. Lynx holds <b>nothing</b> between calls.</p>
+      <pre class="snip">result = await run_agent(agent, task,
+    tools=tools, policy=policy, sinks=(stdout_sink(),))</pre>
+      <div class="tags"><span class="tag">run_agent()</span><span class="tag">stateless</span><span class="tag">pure</span></div>
+    </div>
+    <div class="visual"><canvas id="c-loop"></canvas><div class="cap">model → lynx → executor → result, audited &amp; fed back</div></div>
+  </div>
+</section>
+
+<!-- 2 VERDICTS -->
+<section class="feature" id="f-verdicts">
+  <div class="wrap">
+    <div class="desc">
+      <div class="kicker"><span class="num">02</span> The boundary</div>
+      <h2>Five verdicts on every action</h2>
+      <p>Policy is a pure function of <code>(request, context)</code> that returns exactly one verdict — and the action can't run unless it says so. <b>allow</b> runs it, <b>deny</b> refuses, <b>dry_run</b> previews via a side-effect-free shadow, <b>approve_required</b> pauses for a human, <b>transform</b> rewrites the args first.</p>
+      <p>No rule matched? It <b>fails closed</b> — and names the fall-through in the audit trail.</p>
+      <pre class="snip">- match: { tool: shell, args.cmd.matches: 'rm -rf' }
+  decision: deny</pre>
+      <div class="tags"><span class="tag">allow</span><span class="tag">deny</span><span class="tag">dry_run</span><span class="tag">approve_required</span><span class="tag">transform</span></div>
+    </div>
+    <div class="visual"><canvas id="c-verdicts"></canvas><div class="cap">one request in, exactly one verdict out</div></div>
+  </div>
+</section>
+
+<!-- 3 OBLIGATIONS -->
+<section class="feature" id="f-obligations">
+  <div class="wrap">
+    <div class="desc">
+      <div class="kicker"><span class="num">03</span> Decision + obligations <span class="badge">new</span></div>
+      <h2>Allow — but you must also…</h2>
+      <p>Like XACML and AWS Cedar, a decision can carry <b>mandatory side-actions</b>. A <b>pre</b> obligation is a fail-closed gate: if "issue the 5-minute credential" fails, the action is denied and the tool never runs. A <b>post</b> obligation fires after — notify finance — and is flagged if it fails (physics: the side effect already happened).</p>
+      <p>Mechanism, not policy: the kernel ships <b>no</b> handlers — you wire an <code>obligations={…}</code> registry.</p>
+      <pre class="snip">- match: { tool: refund, args.amount.gt: 1000 }
+  decision: allow
+  obligations: [{ id: notify-finance, phase: post }]</pre>
+      <div class="tags"><span class="tag">phase: pre → gate</span><span class="tag">phase: post → flag</span><span class="tag">fail-closed</span></div>
+    </div>
+    <div class="visual"><canvas id="c-oblig"></canvas><div class="cap">pre-gate must clear before the action; post fires after</div></div>
+  </div>
+</section>
+
+<!-- 4 LAYERED POLICY -->
+<section class="feature" id="f-layers">
+  <div class="wrap">
+    <div class="desc">
+      <div class="kicker"><span class="num">04</span> Layered policy scopes</div>
+      <h2>org → team → user, composed</h2>
+      <p>Stack independent named policies. Each layer is evaluated on its own, then a developer-chosen <b>Combiner</b> resolves disagreements. The default <code>strict_overrides_loose</code> is fail-closed: a broader layer sets a floor narrower layers can only <b>tighten</b> — any layer can deny, none can secretly re-grant.</p>
+      <p>Non-matching layers abstain; provenance stays layer-tagged (<code>team:block-http</code>).</p>
+      <pre class="snip">compile_policy([PolicyLayer("org", org),
+    PolicyLayer("team", team), PolicyLayer("user", user)])</pre>
+      <div class="tags"><span class="tag">strict_overrides_loose</span><span class="tag">last_layer_wins</span><span class="tag">first_layer_wins</span></div>
+    </div>
+    <div class="visual"><canvas id="c-layers"></canvas><div class="cap">a request drops through each layer; the strictest wins</div></div>
+  </div>
+</section>
+
+<!-- 5 BUDGETS -->
+<section class="feature" id="f-budgets">
+  <div class="wrap">
+    <div class="desc">
+      <div class="kicker"><span class="num">05</span> Loop control &amp; rails</div>
+      <h2>Caps that stop a runaway run</h2>
+      <p>Hard budgets on <b>steps, duration, and tokens</b> (separate input / output / combined) are enforced between steps — they <b>halt</b> the run, they don't just alert. Plus a <b>kill-switch</b> checked before every tool, and a <b>repetition gate</b> that breaks same-tool-same-args infinite loops.</p>
+      <p>Lynx counts; it never prices. You multiply <code>step.usage</code> by your own rates in a sink.</p>
+      <pre class="snip">run_agent(..., budget=Budget(steps=50, output_tokens=100_000),
+    cancel=CancelToken())</pre>
+      <div class="tags"><span class="tag">Budget(steps, tokens, …)</span><span class="tag">CancelToken</span><span class="tag">max_repeated_calls</span></div>
+    </div>
+    <div class="visual"><canvas id="c-budget"></canvas><div class="cap">token budget fills as steps run — at the cap, the run stops</div></div>
+  </div>
+</section>
+
+<!-- 6 DURABLE -->
+<section class="feature" id="f-durable">
+  <div class="wrap">
+    <div class="desc">
+      <div class="kicker"><span class="num">06</span> Durable execution</div>
+      <h2>Crash-resume, no double side effects</h2>
+      <p>Pass a <code>RunStore</code> you own and a stable <code>run_id</code>. Every action is journaled <b>before</b> it runs. A crash mid-loop? On retry, completed steps <b>replay from the journal</b> — the model isn't re-called (no re-burned tokens) and journaled actions aren't re-executed (no double charges).</p>
+      <p>Two racing workers resolve to one winner; the loser exits <code>superseded</code> having executed nothing.</p>
+      <pre class="snip">run_agent(..., store=my_store, run_id="invoice-0611")</pre>
+      <div class="tags"><span class="tag">write-ahead journal</span><span class="tag">replay</span><span class="tag">supersede</span></div>
+    </div>
+    <div class="visual"><canvas id="c-durable"></canvas><div class="cap">write → crash → replay completed steps → continue</div></div>
+  </div>
+</section>
+
+<!-- 7 AUDIT -->
+<section class="feature" id="f-audit">
+  <div class="wrap">
+    <div class="desc">
+      <div class="kicker"><span class="num">07</span> Tamper-evident audit</div>
+      <h2>An audit log you can't quietly edit</h2>
+      <p><code>hash_chained_sink</code> fingerprints every event and chains it to the one before — <code>hash = sha256(prev + event)</code>. Edit a body, drop a denial, or reorder events and <b>every fingerprint downstream breaks</b>. A pure, stdlib-only sink that composes with the rest.</p>
+      <p>Verify with <code>verify_chain()</code> or <code>lynx verify audit.jsonl</code> — exits 1 if broken.</p>
+      <pre class="snip">run_agent(..., sinks=(hash_chained_sink(f),))
+verify_chain("audit.jsonl")    <span class="c"># intact=True</span></pre>
+      <div class="tags"><span class="tag">hash_chained_sink</span><span class="tag">verify_chain</span><span class="tag">otel_sink</span></div>
+    </div>
+    <div class="visual"><canvas id="c-audit"></canvas><div class="cap">tamper with one block → the chain breaks from there on</div></div>
+  </div>
+</section>
+
+<!-- 8 EXECUTOR -->
+<section class="feature" id="f-executor">
+  <div class="wrap">
+    <div class="desc">
+      <div class="kicker"><span class="num">08</span> The executor seam</div>
+      <h2>Policy says whether — the executor says where</h2>
+      <p>Every approved action flows through one <code>Executor</code>: in-process, a <b>subprocess with rlimits</b>, or <b>your</b> Docker / gVisor / E2B / Firecracker wrapper — one async callable. Route per-tool with <code>@tool(isolation=…)</code> + <code>route_executor</code>.</p>
+      <p>Routing <b>fails closed</b>: a tool that asks for a sandbox with no route gets a failed action, never a silent fallback to the host.</p>
+      <pre class="snip">run_agent(..., executor=route_executor({
+    None: inline_executor(), "container": my_docker}))</pre>
+      <div class="tags"><span class="tag">inline_executor</span><span class="tag">subprocess_executor</span><span class="tag">route_executor</span></div>
+    </div>
+    <div class="visual"><canvas id="c-exec"></canvas><div class="cap">each action routes to its isolation — missing route = blocked</div></div>
+  </div>
+</section>
+
+<!-- 9 COMPRESSOR -->
+<section class="feature" id="f-compressor">
+  <div class="wrap">
+    <div class="desc">
+      <div class="kicker"><span class="num">09</span> The compressor seam</div>
+      <h2>Shrink results before they cost you</h2>
+      <p>Metering measures spend; the compressor <b>reduces</b> it. Every fresh tool result is shrunk <b>before</b> it enters the conversation, the journal, and any replay — so a 40 KB log dumped once isn't re-sent in full on every later step.</p>
+      <p>Ships <code>truncate</code>, <code>dedup</code>, <code>route</code>, <code>compose</code> reference compressors and <b>fails open</b> — a broken compressor never drops a real output.</p>
+      <pre class="snip">run_agent(..., compressor=truncate_compressor(max_chars=2000))</pre>
+      <div class="tags"><span class="tag">compressor=</span><span class="tag">fails open</span><span class="tag">prompt caching</span></div>
+    </div>
+    <div class="visual"><canvas id="c-compress"></canvas><div class="cap">40 KB result → compressor → 1.2 KB into the conversation</div></div>
+  </div>
+</section>
+
+<!-- 10 GRAPH -->
+<section class="feature" id="f-graph">
+  <div class="wrap">
+    <div class="desc">
+      <div class="kicker"><span class="num">10</span> Handoff graphs</div>
+      <h2>The edge is a permission boundary</h2>
+      <p>Sequential multi-agent workflows where each node is one <code>run_agent</code> call with its <b>own</b> policy, tools, and budget. Per-node policy is <b>enforced, not prompted</b> — if triage tries to write, its node denies it; the orchestrator can't bypass its role.</p>
+      <p>And <code>denials_gt</code> routes: too many rejections escalate to a privileged node. Bounded by construction (<code>max_transitions</code>).</p>
+      <pre class="snip">graph = compile_graph(spec_yaml)
+await run_graph(nodes, "Fix the bug", router=graph)</pre>
+      <div class="tags"><span class="tag">compile_graph</span><span class="tag">denials_gt</span><span class="tag">durable</span></div>
+    </div>
+    <div class="visual"><canvas id="c-graph"></canvas><div class="cap">triage → fixer ⇄ reviewer; repeated denials escalate</div></div>
+  </div>
+</section>
+
+<!-- 11 APPROVALS -->
+<section class="feature" id="f-approve">
+  <div class="wrap">
+    <div class="desc">
+      <div class="kicker"><span class="num">11</span> Human-in-the-loop</div>
+      <h2>Pause for a human — with a deadline</h2>
+      <p>The <code>approve_required</code> verdict <b>blocks the run synchronously</b> and calls your handler — a CLI prompt, a Slack button, a webhook. Grant it and the action proceeds; deny it and it's refused.</p>
+      <p>The wait is bounded: an enforced <code>timeout_seconds</code> means a request can't hang forever. No answer in time → it <b>fails closed</b> (denied).</p>
+      <pre class="snip">run_agent(..., on_approval=cli_prompt_approval())
+<span class="c"># or: callback_approval(slack_handler)</span></pre>
+      <div class="tags"><span class="tag">approve_required</span><span class="tag">cli_prompt / callback</span><span class="tag">timeout_seconds</span></div>
+    </div>
+    <div class="visual"><canvas id="c-approve"></canvas><div class="cap">paused → approve / deny / timed-out (fail-closed)</div></div>
+  </div>
+</section>
+
+<!-- 12 SINKS -->
+<section class="feature" id="f-sinks">
+  <div class="wrap">
+    <div class="desc">
+      <div class="kicker"><span class="num">12</span> Streaming audit</div>
+      <h2>Events fan out to your sinks</h2>
+      <p>Every step emits <code>AuditEvent</code>s. Lynx <b>streams</b> them and <b>stores nothing</b> — <code>multi_sink</code> fans each one out concurrently to stdout, a JSONL file, a hash-chained log, OpenTelemetry spans, a webhook, whatever you wire.</p>
+      <p>Your sink owns the bytes: you buffer, rotate, and ship where you want. Write your own — it's just <code>async __call__(event)</code>.</p>
+      <pre class="snip">sink = multi_sink(stdout_sink(), jsonl_sink(f), otel_sink())
+run_agent(..., sinks=(sink,))</pre>
+      <div class="tags"><span class="tag">multi_sink</span><span class="tag">otel_sink</span><span class="tag">jsonl_sink</span><span class="tag">callback_sink</span></div>
+    </div>
+    <div class="visual"><canvas id="c-sinks"></canvas><div class="cap">one event → many sinks, concurrently — Lynx keeps nothing</div></div>
+  </div>
+</section>
+
+<!-- 13 MCP PROXY -->
+<section class="feature" id="f-mcp">
+  <div class="wrap">
+    <div class="desc">
+      <div class="kicker"><span class="num">13</span> MCP proxy</div>
+      <h2>Govern any MCP server, zero code change</h2>
+      <p>Point your MCP client (Claude Desktop/Code, Cursor) at <b>Lynx instead of the server</b>. Every <code>call_tool</code> flows through the same <code>evaluate → mediate</code> path — all five verdicts, full audit stream — and a denied call <b>never reaches the upstream server</b>.</p>
+      <p>No rewrite on either side: the client thinks it's talking to the server.</p>
+      <pre class="snip">await serve_mcp_proxy("mcp-server-foo",
+    policy=policy, sinks=(stdout_sink(),))</pre>
+      <div class="tags"><span class="tag">serve_mcp_proxy</span><span class="tag">GovernedProxy</span><span class="tag">allow / deny / transform</span></div>
+    </div>
+    <div class="visual"><canvas id="c-mcp"></canvas><div class="cap">client → Lynx → server; denied calls stop at Lynx</div></div>
+  </div>
+</section>
+
+<!-- 14 MULTI-PROVIDER -->
+<section class="feature" id="f-provider">
+  <div class="wrap">
+    <div class="desc">
+      <div class="kicker"><span class="num">14</span> Model adapters</div>
+      <h2>One policy, any model</h2>
+      <p>The same <code>run_agent</code> + policy governs every provider. Swap the adapter — <b>Claude</b>, <b>GPT</b>, or any OpenAI-compatible (<b>Grok, Mistral, DeepSeek, Groq, Ollama</b>) through one registry — and the policy is <b>unchanged</b>.</p>
+      <p>Governance lives at the tool boundary, not in the model. The model is a plug-in.</p>
+      <pre class="snip">agent = openai_compatible_agent("grok",
+    tools=tools, model="grok-2")   <span class="c"># same policy, any model</span></pre>
+      <div class="tags"><span class="tag">ClaudeAgent</span><span class="tag">OpenAIAgent</span><span class="tag">openai_compatible_agent</span></div>
+    </div>
+    <div class="visual"><canvas id="c-provider"></canvas><div class="cap">swap the model adapter — the policy never changes</div></div>
+  </div>
+</section>
+
+<!-- 15 TOOLGUARD -->
+<section class="feature" id="f-toolguard">
+  <div class="wrap">
+    <div class="desc">
+      <div class="kicker"><span class="num">15</span> Framework-native governance</div>
+      <h2>Your framework drives — Lynx governs</h2>
+      <p>When an agent <i>framework</i> owns the loop (OpenAI Agents SDK, LangChain, CrewAI, PydanticAI), drop a <code>ToolGuard</code> in front of its tool calls. <code>await guard.check(name, args)</code> runs the same <code>evaluate → mediate</code> kernel and returns a <code>GovernedCall</code> — so all five verdicts work with <b>no proxy and no rewrite</b>.</p>
+      <p>This is the <b>inverse of an adapter</b>: there Lynx drives the loop; here the framework drives, and Lynx governs each call inside it.</p>
+      <pre class="snip">guard = ToolGuard(tools=tools, policy=policy)
+call = await guard.check(tool_name, args)   <span class="c"># GovernedCall</span></pre>
+      <div class="tags"><span class="tag">ToolGuard</span><span class="tag">guard.check()</span><span class="tag">governed_function_tools</span></div>
+    </div>
+    <div class="visual"><canvas id="c-toolguard"></canvas><div class="cap">the framework owns the loop; Lynx checks each call inside it</div></div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div><span class="brand"><span class="dot"></span> Lynx</span> — policy-gated, durable, audited execution for AI agent tool calls.</div>
+    <div>
+      <a href="https://pypi.org/project/lynx-agent/">PyPI</a> ·
+      <a href="https://github.com/hadihonarvar/lynx">GitHub</a> ·
+      <a href="index.html">Overview</a>
+    </div>
+  </div>
+</footer>
+
+<!-- Three.js hero (WebGL) with graceful fallback -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"
+        onload="window.__three_ok=true" onerror="window.__three_ok=false"></script>
+<script>
+/* ========================= palette ========================= */
+const C={bg:'#0d1014',panel:'#161a21',line:'#2a323d',ink:'#e8edf4',muted:'#9aa6b6',
+  faint:'#6b7686',amber:'#f5a623',blue:'#5cc8ff',green:'#51d88a',red:'#ff6b6b',violet:'#b08cff'};
+const SANS='600 15px system-ui,-apple-system,sans-serif';
+const SANS_S='12px system-ui,-apple-system,sans-serif';
+const MONO='12px ui-monospace,Menlo,monospace';
+
+/* ========================= helpers ========================= */
+function rr(ctx,x,y,w,h,r){r=Math.min(r,w/2,h/2);ctx.beginPath();
+  ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
+const lerp=(a,b,t)=>a+(b-a)*t;
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const ease=t=>t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
+function txt(ctx,s,x,y,col,font,align){ctx.fillStyle=col;ctx.font=font||SANS;
+  ctx.textAlign=align||'center';ctx.textBaseline='middle';ctx.fillText(s,x,y);}
+function box(ctx,x,y,w,h,label,sub,col,glow){
+  ctx.save();
+  if(glow){ctx.shadowColor=col;ctx.shadowBlur=glow;}
+  ctx.fillStyle=C.panel;rr(ctx,x,y,w,h,11);ctx.fill();
+  ctx.shadowBlur=0;ctx.lineWidth=1.6;ctx.strokeStyle=col||C.line;rr(ctx,x,y,w,h,11);ctx.stroke();
+  txt(ctx,label,x+w/2,y+h/2-(sub?9:0),C.ink,SANS);
+  if(sub)txt(ctx,sub,x+w/2,y+h/2+10,C.faint,SANS_S);
+  ctx.restore();
+}
+function dot(ctx,x,y,r,col,glow){ctx.save();ctx.shadowColor=col;ctx.shadowBlur=glow==null?16:glow;
+  ctx.fillStyle=col;ctx.beginPath();ctx.arc(x,y,r,0,7);ctx.fill();ctx.restore();}
+function arrow(ctx,x1,y1,x2,y2,col,a,w){ctx.save();ctx.globalAlpha=a==null?1:a;
+  ctx.strokeStyle=col;ctx.fillStyle=col;ctx.lineWidth=w||2;
+  ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+  const an=Math.atan2(y2-y1,x2-x1);
+  ctx.beginPath();ctx.moveTo(x2,y2);ctx.lineTo(x2-9*Math.cos(an-.42),y2-9*Math.sin(an-.42));
+  ctx.lineTo(x2-9*Math.cos(an+.42),y2-9*Math.sin(an+.42));ctx.closePath();ctx.fill();ctx.restore();}
+function qbez(p0,p1,p2,t){const u=1-t;return{
+  x:u*u*p0.x+2*u*t*p1.x+t*t*p2.x, y:u*u*p0.y+2*u*t*p1.y+t*t*p2.y};}
+
+/* ========================= engine ========================= */
+const anims=[];
+function mount(id,draw){
+  const c=document.getElementById(id);if(!c)return;
+  // default visible so the first paint never depends on an IO callback firing;
+  // the observer then only PAUSES canvases that scroll out of view (perf).
+  const o={c,ctx:c.getContext('2d'),draw,vis:true,t0:performance.now()};
+  anims.push(o);
+  new IntersectionObserver(es=>es.forEach(e=>o.vis=e.isIntersecting),{threshold:0}).observe(c);
+  sizeOne(o);
+}
+function sizeOne(o){const r=o.c.getBoundingClientRect();const dpr=Math.min(window.devicePixelRatio||1,2);
+  o.c.width=Math.max(1,r.width*dpr);o.c.height=Math.max(1,r.height*dpr);}
+window.addEventListener('resize',()=>anims.forEach(sizeOne));
+function frame(now){
+  for(const o of anims){
+    if(!o.vis)continue;
+    const ctx=o.ctx;
+    ctx.setTransform(o.c.width/600,0,0,o.c.height/420,0,0);
+    ctx.fillStyle=C.bg;ctx.fillRect(0,0,600,420);
+    try{o.draw(ctx,(now-o.t0)/1000);}catch(e){/* one bad frame never kills the rest */}
+  }
+  requestAnimationFrame(frame);
+}
+
+/* ============================================================
+   VISUAL 01 — the chokepoint loop
+   ============================================================ */
+function vLoop(ctx,t){
+  const y=200,h=58,w=104,bx=[18,170,322,474];
+  const cx=bx.map(x=>x+w/2);
+  // connecting arrows in the gaps
+  for(let i=0;i<3;i++)arrow(ctx,bx[i]+w,y,bx[i+1],y,C.line,1,2);
+  // feedback arc (result -> model)
+  ctx.save();ctx.strokeStyle=C.line;ctx.lineWidth=2;ctx.setLineDash([5,6]);
+  ctx.beginPath();ctx.moveTo(cx[3],y+h/2);
+  ctx.bezierCurveTo(cx[3],360,cx[0],360,cx[0],y+h/2);ctx.stroke();ctx.restore();
+  txt(ctx,'result fed back into the loop',300,372,C.faint,MONO);
+  // packet position over a 4.4s cycle across the 3 forward segments
+  const dur=4.4,p=(t%dur)/dur, seg=Math.min(2,Math.floor(p*3)),lp=ease((p*3)%1);
+  const px=lerp(cx[seg],cx[seg+1],lp), py=y;
+  const inGate=px>bx[1]-6&&px<bx[1]+w+6;
+  // boxes
+  box(ctx,bx[0],y-h/2,w,h,'Model','proposes',C.line,0);
+  box(ctx,bx[1],y-h/2,w,h,'Lynx','evaluate→mediate',C.amber,inGate?26:12);
+  box(ctx,bx[2],y-h/2,w,h,'Executor','your sandbox',C.line,0);
+  box(ctx,bx[3],y-h/2,w,h,'Result','audited',C.line,0);
+  // feedback packet (faint) — follows the SAME cubic path drawn above, back to Model
+  const fp=(t*0.22)%1, fu=1-fp;
+  const fx=fu*fu*fu*cx[3]+3*fu*fu*fp*cx[3]+3*fu*fp*fp*cx[0]+fp*fp*fp*cx[0];
+  const fy=fu*fu*fu*229+3*fu*fu*fp*360+3*fu*fp*fp*360+fp*fp*fp*229;
+  dot(ctx,fx,fy,3.5,C.faint,8);
+  // forward packet
+  dot(ctx,px,py,6,inGate?C.amber:C.blue,inGate?22:16);
+}
+
+/* ============================================================
+   VISUAL 02 — five verdicts fan-out
+   ============================================================ */
+const VERDS=[
+  {k:'allow',col:C.green,d:'tool runs'},
+  {k:'deny',col:C.red,d:'blocked'},
+  {k:'dry_run',col:C.blue,d:'shadow preview'},
+  {k:'approve',col:C.amber,d:'wait for human'},
+  {k:'transform',col:C.violet,d:'args rewritten'},
+];
+function vVerdicts(ctx,t){
+  const gx=30,gw=120,gh=58,gy=200;
+  const cys=[50,118,186,254,322];
+  const dur=1.7,idx=Math.floor(t/dur)%5,lp=(t%dur)/dur;
+  // request entering gate
+  const inx=clamp((lp<.18?lp/.18:1),0,1);
+  // lanes
+  for(let i=0;i<5;i++){
+    const v=VERDS[i],cy=cys[i],active=i===idx;
+    const p0={x:gx+gw,y:gy},p1={x:300,y:gy},p2={x:430,y:cy};
+    ctx.save();ctx.strokeStyle=active?v.col:C.line;ctx.globalAlpha=active?.9:.5;ctx.lineWidth=active?2.5:1.4;
+    ctx.beginPath();ctx.moveTo(p0.x,p0.y);ctx.quadraticCurveTo(p1.x,p1.y,p2.x,p2.y);ctx.stroke();ctx.restore();
+    box(ctx,432,cy-21,150,42,v.k,v.d,active?v.col:C.line,active?16:0);
+    // outcome glyph on active
+    if(active){
+      let pp, paused=false;
+      if(v.k==='deny'){                               // reach the box, then bounce back
+        pp=(lp<.5?ease(lp*2):ease((1-lp)*2))*0.84;
+      }else if(v.k==='approve'){                       // advance, HOLD for a human, then proceed
+        if(lp<.32)pp=ease(lp/.32)*0.52;
+        else if(lp<.62){pp=0.52;paused=true;}
+        else pp=0.52+ease((lp-.62)/.38)*0.48;
+      }else pp=ease(clamp(lp*1.2,0,1));
+      const pt=qbez(p0,p1,p2,clamp(pp,0,1));
+      if(paused){                                      // pause glyph above the waiting packet
+        ctx.save();ctx.fillStyle=C.amber;
+        ctx.fillRect(pt.x-5,pt.y-20,3,9);ctx.fillRect(pt.x+2,pt.y-20,3,9);
+        txt(ctx,'human',pt.x,pt.y-28,C.amber,MONO);ctx.restore();
+      }
+      dot(ctx,pt.x,pt.y,6,v.col,20);
+    }
+  }
+  box(ctx,gx,gy-gh/2,gw,gh,'policy','(req, ctx)',C.amber,18);
+  // request dot
+  if(inx<1)dot(ctx,lerp(-10,gx,inx),gy,5,C.blue,14);
+}
+
+/* ============================================================
+   VISUAL 03 — obligations (pre gate + post notify)
+   ============================================================ */
+function vOblig(ctx,t){
+  const y=168,h=54,w=96;
+  const cx={model:66,pre:206,act:346,res:516};   // box CENTERS; packet flows through them
+  const dur=4.4,ci=Math.floor(t/dur),fail=(ci%4===3),p=(t%dur)/dur;
+  const preOpen=!fail;
+  // links between adjacent box edges
+  const link=(a,b)=>arrow(ctx,a+w/2,y,b-w/2,y,C.line,1,2);
+  link(cx.model,cx.pre);link(cx.pre,cx.act);link(cx.act,cx.res);
+  // post-notify target
+  box(ctx,cx.act-75,330,150,40,'#finance','post: notify',C.blue,0);
+  // boxes
+  box(ctx,cx.model-w/2,y-h/2,w,h,'Model','refund req',C.line,0);
+  const lockCol=p<.30?C.faint:(preOpen?C.green:C.red);
+  box(ctx,cx.pre-w/2,y-h/2,w,h,'pre-gate',
+      preOpen?(p<.30?'checking…':'credential ✓'):'DENIED',lockCol,p<.34?14:(preOpen?14:20));
+  drawLock(ctx,cx.pre+w/2-6,y-h/2-13,p<.30?'shut':(preOpen?'open':'shut'),lockCol);
+  box(ctx,cx.act-w/2,y-h/2,w,h,'action',
+      preOpen?(p>.62?'ran ✓':'runs'):'skipped',preOpen?(p>.62?C.green:C.muted):C.line,0);
+  box(ctx,cx.res-w/2,y-h/2,w,h,'Result',
+      fail?'DENIED':(p>.88?'ok ✓':'…'),fail?C.red:(p>.88?C.green:C.line),p>.62?12:0);
+  txt(ctx,'pre: issue-ttl-credential (300s)',cx.pre,y+h/2+24,C.faint,MONO);
+  // packet motion — continuous through centers
+  let px,col=C.violet;
+  if(p<.30){px=lerp(cx.model,cx.pre,ease(p/.30));}
+  else if(!preOpen){px=lerp(cx.pre,cx.model,ease(clamp((p-.30)/.45,0,1)));col=C.red;}
+  else if(p<.62){px=lerp(cx.pre,cx.act,ease((p-.30)/.32));}
+  else{px=lerp(cx.act,cx.res,ease(clamp((p-.62)/.30,0,1)));col=C.green;}
+  dot(ctx,px,y,6,col,20);
+  // post bubble dropping to #finance once the action has run
+  if(preOpen&&p>.62){const q=ease(clamp((p-.62)/.32,0,1));
+    dot(ctx,lerp(cx.act,cx.act+8,q),lerp(y+h/2,330,q),5,C.blue,15);}
+  txt(ctx, fail?'pre obligation failed → fail-closed → the tool never runs'
+                :'pre cleared → action runs → post notifies #finance',
+       300, 398, fail?C.red:C.muted, MONO);
+}
+function drawLock(ctx,x,y,state,col){
+  ctx.save();ctx.strokeStyle=col;ctx.fillStyle=col;ctx.lineWidth=2.4;
+  rr(ctx,x-8,y,16,12,3);ctx.fillStyle=C.bg;ctx.fill();ctx.strokeStyle=col;rr(ctx,x-8,y,16,12,3);ctx.stroke();
+  ctx.beginPath();
+  if(state==='open')ctx.arc(x+3,y-3,6,Math.PI,Math.PI*2.1);
+  else ctx.arc(x,y-3,6,Math.PI,Math.PI*2);
+  ctx.stroke();ctx.restore();
+}
+
+/* ============================================================
+   VISUAL 04 — layered policy (org/team/user drop-through)
+   ============================================================ */
+function vLayers(ctx,t){
+  // three clearly-tinted filter bars; the gap (slot) narrows top→bottom (org loosest, user strictest)
+  const layers=[{name:'org', scope:'broadest',  gap:168,y:78, col:C.blue,   tint:'rgba(92,200,255,.14)'},
+                {name:'team',scope:'tightens',   gap:108,y:172,col:C.amber,  tint:'rgba(245,166,35,.14)'},
+                {name:'user',scope:'strictest',  gap:60, y:266,col:C.violet, tint:'rgba(176,140,255,.16)'}];
+  const dur=4.6,ci=Math.floor(t/dur),p=(t%dur)/dur;
+  // rotate which layer denies: each layer gets a turn, plus one all-pass cycle (ci%4===3)
+  const denyAt = (ci%4===3) ? -1 : (ci%4);
+  const cxc=300;
+  txt(ctx,'strict_overrides_loose — any layer can tighten; the strictest wins',300,36,C.faint,MONO);
+  layers.forEach((L,i)=>{
+    const closed = denyAt===i;
+    const gap = closed?0:L.gap;
+    ctx.save();ctx.fillStyle=L.tint;ctx.strokeStyle=L.col;ctx.lineWidth=2;
+    rr(ctx,64,L.y,(cxc-gap/2)-64,34,7);ctx.fill();ctx.stroke();          // left slab
+    rr(ctx,cxc+gap/2,L.y,536-(cxc+gap/2),34,7);ctx.fill();ctx.stroke();  // right slab
+    ctx.restore();
+    // label sits ON the left slab so the bar is unmistakably a named layer
+    txt(ctx,L.name,82,L.y+17,L.col,SANS,'left');
+    txt(ctx,L.scope,520,L.y+17,C.faint,MONO,'right');
+    if(closed)txt(ctx,'✕ denies',cxc,L.y+17,C.red,MONO);
+  });
+  // falling request
+  const top=44,yEnd=348;
+  let by=lerp(top,yEnd,ease(p)),blocked=false;
+  if(denyAt>=0){const stopY=layers[denyAt].y-12; if(by>=stopY){by=stopY;blocked=true;}}
+  box(ctx,206,356,188,46,'Combiner', blocked?'final: DENY':'final: ALLOW', blocked?C.red:C.green, by>=348?16:0);
+  dot(ctx,cxc,by,7,blocked?C.red:C.green,18);
+}
+
+/* ============================================================
+   VISUAL 05 — budgets gauge
+   ============================================================ */
+function vBudget(ctx,t){
+  const dur=6.5,p=(t%dur)/dur;
+  const n=12, capStep=9;                              // budget is exhausted after the 9th step
+  const run=Math.min(capStep,Math.floor(p/0.70*capStep));  // how many steps have executed
+  const halted=p>=0.70;                               // once spent, the run is stopped
+  const consumed=run/capStep;                         // fraction of the token cap spent
+  const tok=Math.round(consumed*550);
+  // tokens-spent meter (consumption toward a hard ceiling — NOT a progress bar)
+  const gx=60,gy=78,gw=480,gh=34;
+  txt(ctx,'output tokens spent',gx,gy-14,C.faint,MONO,'left');
+  txt(ctx,tok+'k / 550k',gx+gw,gy-14,halted?C.red:C.amber,MONO,'right');
+  ctx.fillStyle=C.panel;rr(ctx,gx,gy,gw,gh,8);ctx.fill();
+  ctx.strokeStyle=C.line;ctx.lineWidth=1.5;rr(ctx,gx,gy,gw,gh,8);ctx.stroke();
+  const grad=ctx.createLinearGradient(gx,0,gx+gw,0);
+  grad.addColorStop(0,'#b98e3a');grad.addColorStop(.82,C.amber);grad.addColorStop(1,C.red);
+  ctx.save();rr(ctx,gx+2,gy+2,(gw-4)*consumed,gh-4,6);ctx.clip();
+  ctx.fillStyle=grad;ctx.fillRect(gx,gy,gw,gh);ctx.restore();
+  // hard cap at the right edge
+  ctx.strokeStyle=C.red;ctx.setLineDash([4,4]);ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(gx+gw,gy-6);ctx.lineTo(gx+gw,gy+gh+6);ctx.stroke();ctx.setLineDash([]);
+  txt(ctx,'hard cap',gx+gw,gy+gh+18,C.red,MONO,'right');
+  // planned steps: executed (amber) … then BLOCKED once the budget is gone (the rest never run)
+  const sy=150,sw=(gw-(n-1)*6)/n;
+  txt(ctx,'steps',gx,sy-12,C.faint,MONO,'left');
+  for(let i=0;i<n;i++){
+    const x=gx+i*(sw+6);
+    const ran=i<run, blocked=i>=capStep&&halted;
+    ctx.save();
+    ctx.fillStyle=ran?'rgba(245,166,35,.20)':'transparent';
+    ctx.strokeStyle=ran?C.amber:(blocked?C.red:C.line);ctx.lineWidth=1.6;
+    rr(ctx,x,sy,sw,30,5);ctx.fill();ctx.stroke();
+    if(blocked){ctx.strokeStyle=C.red;ctx.lineWidth=2;ctx.beginPath();
+      ctx.moveTo(x+5,sy+6);ctx.lineTo(x+sw-5,sy+24);ctx.stroke();}
+    ctx.restore();
+  }
+  txt(ctx,'■ executed',gx,sy+50,C.amber,MONO,'left');
+  txt(ctx,'✕ blocked by the cap — never runs',gx+gw,sy+50,halted?C.red:C.faint,MONO,'right');
+  // status — the cap stops the WHOLE run, not one action
+  if(halted){box(ctx,176,232,248,52,'■ run halts','steps 10–12 never execute',C.red,22);}
+  else txt(ctx,'budget checked between every step',300,250,C.muted,MONO);
+  txt(ctx,'a cap stops the whole run — the rest of the loop is blocked',300,322,C.muted,MONO);
+  txt(ctx,'(honest: the step that crossed the line already ran)',300,346,C.faint,MONO);
+}
+
+/* ============================================================
+   VISUAL 06 — durable resume
+   ============================================================ */
+function vDurable(ctx,t){
+  const n=6,bw=66,gap=14,x0=42,y=120;
+  const dur=8,p=(t%dur)*1; // seconds
+  // phases: write 0-3.2, crash 3.2-4, replay 4-5.8, continue 5.8-8
+  let phase='write';
+  if(p>=5.8)phase='cont';else if(p>=4)phase='replay';else if(p>=3.2)phase='crash';
+  const crashIdx=3;
+  for(let i=0;i<n;i++){
+    const x=x0+i*(bw+gap);
+    let col=C.line,fill=C.panel,lbl='step '+(i+1),sub='';
+    let shown=false,grey=false;
+    if(phase==='write'){shown=i<=Math.floor(p/3.2*n);col=shown?C.green:C.line;sub=shown?'journaled':'';}
+    else if(phase==='crash'){shown=i<=crashIdx;col=i<crashIdx?C.green:C.red;if(i===crashIdx){sub='½ written';}}
+    else if(phase==='replay'){               // completed steps 1..3 replay; step 4 is the resume point
+      shown=i<=crashIdx; const rl=Math.floor((p-4)/1.8*crashIdx);
+      if(i<crashIdx){col=i<=rl?C.faint:C.line;sub=i<=rl?'replayed':'';}
+      else{col=C.amber;sub='resume here';}}
+    else {shown=true;                         // continue: step 4 re-proposed, then 5,6 run fresh
+      if(i<crashIdx){col=C.faint;sub='replayed';}
+      else{const run=crashIdx+Math.floor((p-5.8)/2.2*(n-crashIdx));
+        if(i<=run){col=C.green;sub='ran';}else{col=C.line;sub='';}}}
+    if(!shown)col=C.line;
+    box(ctx,x,y,bw,52,lbl,sub,col,col===C.red?18:0);
+    if(i<n-1)arrow(ctx,x+bw,y+26,x+bw+gap,y+26,C.line,.6,1.5);
+  }
+  // crash bolt
+  if(phase==='crash'){const cx=x0+crashIdx*(bw+gap)+bw/2;
+    ctx.save();ctx.strokeStyle=C.red;ctx.lineWidth=3;ctx.shadowColor=C.red;ctx.shadowBlur=14;
+    ctx.beginPath();ctx.moveTo(cx,30);ctx.lineTo(cx-12,70);ctx.lineTo(cx+4,70);ctx.lineTo(cx-8,108);ctx.stroke();ctx.restore();
+    txt(ctx,'⚡ crash',cx,20,C.red,MONO);}
+  // journal store
+  box(ctx,210,230,180,46,'RunStore (yours)','write-ahead journal',C.blue,0);
+  const cap={write:'journaling each step before it runs',
+    crash:'process dies mid-loop',
+    replay:'completed steps replay — model NOT re-called',
+    cont:'resume at the incomplete step — no double side effects'};
+  const ccol={write:C.muted,crash:C.red,replay:C.amber,cont:C.green};
+  txt(ctx,cap[phase],300,330,ccol[phase],MONO);
+  txt(ctx,'two racing workers → one winner; loser exits "superseded"',300,360,C.faint,MONO);
+}
+
+/* ============================================================
+   VISUAL 07 — tamper-evident hash chain
+   ============================================================ */
+function vAudit(ctx,t){
+  const n=6,bw=70,gap=18,x0=40,y=150;
+  const dur=6,p=(t%dur);
+  // phases: write 0-2.4, tamper 2.4-3.4 (edit block 2), break 3.4-6
+  const tamperIdx=2;
+  let phase='write';if(p>=3.4)phase='break';else if(p>=2.4)phase='tamper';
+  for(let i=0;i<n;i++){
+    const x=x0+i*(bw+gap);
+    let col=C.green,sub='hash ✓';
+    if(phase==='write'){const w=Math.floor(p/2.4*n);if(i>w){col=C.line;sub='';}}
+    else if(phase==='tamper'){if(i===tamperIdx){col=C.red;sub='edited';}}
+    else {if(i>=tamperIdx){col=C.red;sub=i===tamperIdx?'edited':'hash ✗';}}
+    box(ctx,x,y,bw,54,'evt '+(i+1),sub,col,col===C.red?16:0);
+    if(i<n-1){const lc=(phase==='break'&&i>=tamperIdx)?C.red:C.line;
+      // chain link
+      ctx.save();ctx.strokeStyle=lc;ctx.lineWidth=2;ctx.globalAlpha=lc===C.red?1:.7;
+      ctx.beginPath();ctx.moveTo(x+bw,y+27);ctx.lineTo(x+bw+gap,y+27);ctx.stroke();ctx.restore();
+      txt(ctx,'⛓',x+bw+gap/2,y-6,lc===C.red?C.red:C.faint,MONO);}
+  }
+  txt(ctx,'hash = sha256( prev_hash + canonical_json(event) )',300,90,C.faint,MONO);
+  const cap={write:'hash_chained_sink — every event chained to the last',
+    tamper:'attacker edits event 3…',
+    break:'$ lynx verify → broken at line 3: hash mismatch'};
+  const cc={write:C.muted,tamper:C.amber,break:C.red};
+  txt(ctx,cap[phase],300,250,cc[phase],MONO);
+  if(phase==='break')box(ctx,200,290,200,50,'chain broken','editing one line breaks all downstream',C.red,18);
+  else box(ctx,210,290,180,50,'intact','6 events, chain verified',C.green,0);
+}
+
+/* ============================================================
+   VISUAL 08 — executor seam routing
+   ============================================================ */
+const ROUTES=[
+  {name:'inline',sub:'in-process',col:C.green,ok:true},
+  {name:'subprocess',sub:'rlimits',col:C.blue,ok:true},
+  {name:'container',sub:'your Docker',col:C.amber,ok:true},
+  {name:'microvm',sub:'no route ✗',col:C.red,ok:false},
+];
+function vExec(ctx,t){
+  const dur=2.0,idx=Math.floor(t/dur)%4,lp=(t%dur)/dur;
+  const rx=30,ry=200,rw=120,rh=58;
+  box(ctx,rx,ry-rh/2,rw,rh,'router','@tool(isolation)',C.violet,12);
+  const ys=[60,150,250,340];
+  for(let i=0;i<4;i++){
+    const R=ROUTES[i],active=i===idx,y=ys[i];
+    ctx.save();ctx.strokeStyle=active?R.col:C.line;ctx.globalAlpha=active?.9:.45;ctx.lineWidth=active?2.4:1.3;
+    ctx.beginPath();ctx.moveTo(rx+rw,ry);ctx.quadraticCurveTo(300,ry,420,y+21);ctx.stroke();ctx.restore();
+    box(ctx,422,y,158,42,R.name,R.sub,active?R.col:C.line,active?14:0);
+    if(active){
+      // ok: travel to the sandbox. no route: advance partway, then bounce back — never reaches a box.
+      const tt=R.ok?ease(lp):(lp<.5?ease(lp*2):ease((1-lp)*2))*0.5;
+      const pt=qbez({x:rx+rw,y:ry},{x:300,y:ry},{x:420,y:y+21}, tt);
+      dot(ctx,pt.x,pt.y,6,R.ok?R.col:C.red,18);
+    }
+  }
+  txt(ctx,'approved action',rx+rw/2,ry-rh/2-12,C.faint,MONO);
+  txt(ctx, ROUTES[idx].ok?'routes to its declared isolation'
+                          :'isolation has no route → fails closed (never the host)',
+       300,398, ROUTES[idx].ok?C.muted:C.red, MONO);
+}
+
+/* ============================================================
+   VISUAL 09 — compressor seam
+   ============================================================ */
+function gear(ctx,cx,cy,r,teeth,ang,col){           // a rotating cog
+  ctx.save();ctx.translate(cx,cy);ctx.rotate(ang);
+  ctx.strokeStyle=col;ctx.fillStyle='rgba(245,166,35,.12)';ctx.lineWidth=2;
+  ctx.beginPath();
+  const seg=teeth*2;
+  for(let i=0;i<=seg;i++){const a=i/seg*Math.PI*2,rad=(i%2===0)?r:r*0.74;
+    const x=Math.cos(a)*rad,yy=Math.sin(a)*rad; i===0?ctx.moveTo(x,yy):ctx.lineTo(x,yy);}
+  ctx.closePath();ctx.fill();ctx.stroke();
+  ctx.beginPath();ctx.arc(0,0,r*0.28,0,7);ctx.stroke();               // hub
+  ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(r*0.74,0);ctx.stroke();  // spoke makes the spin visible
+  ctx.restore();
+}
+function vCompress(ctx,t){
+  const dur=4,p=(t%dur)/dur;
+  const y=130;
+  txt(ctx,'fresh tool result',110,60,C.faint,MONO);
+  txt(ctx,'conversation / journal',470,60,C.faint,MONO);
+  // compressor = two counter-rotating meshing gears — a rolling mill that squeezes the result
+  txt(ctx,'compressor',300,y-66,C.amber,MONO);
+  const spin=-t*2.4, teeth=9, gr=24;
+  gear(ctx,300,y-28,gr,teeth, spin,            C.amber);
+  gear(ctx,300,y+28,gr,teeth,-spin+Math.PI/teeth, C.amber);   // half-tooth offset → teeth interlock
+  // big block shrinking as it passes funnel
+  const startX=110,funX=300,endX=470;
+  let bx,sz,lbl,col;
+  if(p<.45){const q=ease(p/.45);bx=lerp(startX,funX,q);sz=lerp(70,18,clamp((bx-220)/(funX-220),0,1));lbl='40 KB';col=C.blue;}
+  else {const q=ease((p-.45)/.55);bx=lerp(funX,endX,q);sz=18;lbl='1.2 KB';col=C.green;}
+  // ghost of uncompressed size
+  ctx.save();ctx.globalAlpha=.16;ctx.fillStyle=C.red;rr(ctx,startX-35,y-35,70,70,8);ctx.fill();ctx.restore();
+  txt(ctx,'40 KB if uncompressed',startX,y+58,'rgba(255,107,107,.55)',MONO);
+  ctx.save();ctx.shadowColor=col;ctx.shadowBlur=18;ctx.fillStyle=col;
+  rr(ctx,bx-sz/2,y-sz/2,sz,sz,5);ctx.fill();ctx.restore();
+  txt(ctx,lbl,bx,y+sz/2+16,col,MONO);
+  // conversation stack on the right (grows slowly, compressed)
+  const stackN=4;
+  for(let i=0;i<stackN;i++){ctx.fillStyle=C.panel;ctx.strokeStyle=C.line;ctx.lineWidth=1.3;
+    rr(ctx,425,250+i*30,150,22,5);ctx.fill();ctx.stroke();
+    txt(ctx,'• compressed result',432,261+i*30,C.muted,MONO,'left');}
+  txt(ctx,'shrunk BEFORE it enters context, journal & replay',300,388,C.muted,MONO);
+  txt(ctx,'fails open — a broken compressor never drops real output',300,408,C.faint,MONO);
+}
+
+/* ============================================================
+   VISUAL 10 — handoff graph with denial routing
+   ============================================================ */
+function vGraph(ctx,t){
+  const N={triage:{x:96,y:88},fixer:{x:96,y:300},reviewer:{x:322,y:194},
+           done:{x:540,y:88},priv:{x:540,y:318}};
+  const dur=8.6,scen=Math.floor(t/dur)%2,p=(t%dur);   // scen 0: approved→done · scen 1: denials→escalate
+  // trim a center-to-center line to the target box border (boxes are 116x52 → half 58x26)
+  const trim=(a,b)=>{const dx=b.x-a.x,dy=b.y-a.y;
+    const sx=dx===0?1e9:58/Math.abs(dx),sy=dy===0?1e9:26/Math.abs(dy),s=Math.min(sx,sy);
+    return{x:b.x-dx*s,y:b.y-dy*s};};
+  const edge=(a,b,col,al,w)=>{const e=trim(a,b),s=trim(b,a);
+    arrow(ctx,s.x,s.y,e.x,e.y,col||C.line,al==null?.3:al,w||1.6);};
+  // static graph edges
+  edge(N.triage,N.fixer);edge(N.fixer,N.reviewer);edge(N.reviewer,N.fixer);
+  edge(N.reviewer,N.done);edge(N.reviewer,N.priv);edge(N.triage,N.done);
+  // two scenarios so BOTH terminals are demonstrated
+  const Sdone=[[N.triage,N.fixer,0,1.3,C.blue],
+               [N.fixer,N.reviewer,1.3,2.6,C.blue],
+               [N.reviewer,N.fixer,2.6,3.5,C.red],      // 1 denial → loop back
+               [N.fixer,N.reviewer,3.5,4.8,C.blue],
+               [N.reviewer,N.done,4.8,6.2,C.green]];     // approved → DONE
+  const Sesc =[[N.triage,N.fixer,0,1.2,C.blue],
+               [N.fixer,N.reviewer,1.2,2.4,C.blue],
+               [N.reviewer,N.fixer,2.4,3.2,C.red],
+               [N.fixer,N.reviewer,3.2,4.4,C.blue],
+               [N.reviewer,N.fixer,4.4,5.2,C.red],
+               [N.fixer,N.reviewer,5.2,6.4,C.blue],
+               [N.reviewer,N.priv,6.4,7.8,C.amber]];     // denials_gt 2 → PRIVILEGED
+  const S=scen===0?Sdone:Sesc;
+  const d = scen===0 ? (p>2.6?1:0) : (p>6.4?3:p>4.4?2:p>2.4?1:0);
+  const reachedDone = scen===0 && p>=4.8;
+  const reachedPriv = scen===1 && d>=3;
+  let cur=S[0];for(const s of S){if(p>=s[2])cur=s;if(p>=s[2]&&p<s[3])break;}
+  const lp=clamp((p-cur[2])/(cur[3]-cur[2]),0,1);
+  const es=trim(cur[1],cur[0]),ee=trim(cur[0],cur[1]);   // border→border
+  arrow(ctx,es.x,es.y,ee.x,ee.y,cur[4],.9,2.6);          // highlight the active edge
+  const tp={x:lerp(es.x,ee.x,ease(lp)),y:lerp(es.y,ee.y,ease(lp))};
+  // nodes, each with its own enforced policy (lock)
+  const node=(P,name,role,col)=>{box(ctx,P.x-58,P.y-26,116,52,name,role,col,reachedDone&&P===N.done||reachedPriv&&P===N.priv?16:0);
+    if(role)drawLock(ctx,P.x+44,P.y-32,'shut',col);};
+  node(N.triage,'triage','read-only',C.blue);
+  node(N.fixer,'fixer','can write',C.amber);
+  node(N.reviewer,'reviewer','read-only',C.violet);
+  node(N.done,'done',reachedDone?'approved ✓':'',reachedDone?C.green:C.line);
+  node(N.priv,'privileged',reachedPriv?'escalated':'standby',reachedPriv?C.amber:C.line);
+  dot(ctx,tp.x,tp.y,6,cur[4],18);
+  box(ctx,18,366,166,42,'denials: '+d,
+      d>2?'denials_gt 2 → escalate':'per-node policy enforced',d>2?C.amber:C.faint,d>2?14:0);
+  txt(ctx, scen===0?'approved under the threshold → routes to done'
+                   :'too many denials → denials_gt 2 routes to privileged',
+       430,396, scen===0?C.green:C.amber, MONO);
+}
+
+/* ============================================================
+   VISUAL 11 — approvals (pause for a human, with timeout)
+   ============================================================ */
+function drawBtn(ctx,x,y,w,h,label,col,glow){
+  ctx.save();if(glow){ctx.shadowColor=col;ctx.shadowBlur=18;}
+  ctx.fillStyle=glow?col:'rgba(255,255,255,.04)';ctx.strokeStyle=col;ctx.lineWidth=1.6;
+  rr(ctx,x,y,w,h,7);ctx.fill();ctx.stroke();ctx.shadowBlur=0;
+  txt(ctx,label,x+w/2,y+h/2,glow?'#0b0d10':col,SANS);ctx.restore();
+}
+function vApprove(ctx,t){
+  const dur=5,scen=Math.floor(t/dur)%3,p=(t%dur)/dur;   // 0 approve · 1 deny · 2 timeout
+  const td=scen===2?0.86:0.60, decided=p>=td;
+  box(ctx,24,180,118,56,'wire $5k','irreversible',C.line,0);
+  const paused=p>0.18&&!decided;
+  box(ctx,196,180,120,56,'approve_required',paused?'paused…':'',C.amber,paused?18:10);
+  // human panel
+  const hx=372,hy=70,hw=204,hh=158;
+  ctx.save();ctx.fillStyle=C.panel;ctx.strokeStyle=C.line;ctx.lineWidth=1.5;rr(ctx,hx,hy,hw,hh,12);ctx.fill();ctx.stroke();ctx.restore();
+  txt(ctx,'human approver',hx+16,hy+22,C.muted,MONO,'left');
+  // countdown ring (timeout)
+  const cwin=scen===2?0.86:0.60, frac=clamp(1-(p-0.18)/(cwin-0.18),0,1);
+  const cxr=hx+hw-26,cyr=hy+22,rad=11;
+  ctx.save();ctx.strokeStyle=C.line;ctx.lineWidth=3;ctx.beginPath();ctx.arc(cxr,cyr,rad,0,7);ctx.stroke();
+  ctx.strokeStyle=frac<0.3?C.red:C.amber;ctx.beginPath();ctx.arc(cxr,cyr,rad,-Math.PI/2,-Math.PI/2+frac*Math.PI*2);ctx.stroke();ctx.restore();
+  drawBtn(ctx,hx+16,hy+50,hw-32,34,'Approve',C.green,decided&&scen===0);
+  drawBtn(ctx,hx+16,hy+96,hw-32,34,'Deny',C.red,decided&&scen===1);
+  if(scen===2&&decided)txt(ctx,'⏱ timed out',hx+hw/2,hy+hh-13,C.red,MONO);
+  arrow(ctx,316,200,hx,hy+90,C.line,.4,1.6);
+  // result
+  let rcol=C.line,rlbl='awaiting…';
+  if(decided){if(scen===0){rcol=C.green;rlbl='executed ✓';}else{rcol=C.red;rlbl=scen===2?'expired → denied':'denied';}}
+  box(ctx,150,316,200,48,'result',rlbl,rcol,decided?14:0);
+  // packet
+  if(p<0.18){dot(ctx,lerp(83,256,ease(p/0.18)),208,5,C.amber,14);}
+  else if(!decided){const q=ease((p-0.18)/(td-0.18));dot(ctx,lerp(316,hx,q),lerp(200,hy+90,q),5,C.amber,16);}
+  else{const q=ease(clamp((p-td)/0.25,0,1)),col=scen===0?C.green:C.red;
+    dot(ctx,lerp(hx,250,q),lerp(hy+90,316,q),5,col,16);}
+  txt(ctx,'the run blocks on your handler — CLI · Slack · webhook',300,392,C.faint,MONO);
+  txt(ctx,'no answer before the timeout → fails closed (denied)',300,410,C.faint,MONO);
+}
+
+/* ============================================================
+   VISUAL 12 — sinks (events fan out, Lynx stores nothing)
+   ============================================================ */
+function vSinks(ctx,t){
+  const sinks=[{n:'stdout',s:'pretty-print',c:C.blue},
+               {n:'jsonl',s:'one line / event',c:C.green},
+               {n:'hash-chained',s:'tamper-evident',c:C.amber},
+               {n:'OpenTelemetry',s:'spans',c:C.violet},
+               {n:'webhook',s:'your HTTP',c:C.blue}];
+  const fx=232,fy=206,ys=[44,104,164,224,284];
+  const dur=1.3,p=(t%dur)/dur;
+  box(ctx,24,176,120,60,'run_agent','emits events',C.line,0);
+  arrow(ctx,144,206,fx-46,206,C.line,.5,1.6);
+  sinks.forEach((S,i)=>{
+    const sy=ys[i],by=sy+17,sx=408;
+    ctx.save();ctx.strokeStyle=C.line;ctx.globalAlpha=.4;ctx.lineWidth=1.4;
+    ctx.beginPath();ctx.moveTo(fx+46,fy);ctx.quadraticCurveTo(330,fy,sx,by);ctx.stroke();ctx.restore();
+    const arriving=p>0.9;
+    box(ctx,sx,sy,168,34,S.n,S.s,arriving?S.c:C.line,arriving?12:0);
+    if(p>=0.3){const q=ease((p-0.3)/0.7);
+      const pt=qbez({x:fx+46,y:fy},{x:330,y:fy},{x:sx,y:by},q);
+      dot(ctx,pt.x,pt.y,4.5,S.c,12);}
+  });
+  box(ctx,fx-46,fy-22,92,44,'multi_sink','fan-out',C.amber,12);
+  if(p<0.35){dot(ctx,lerp(144,fx-46,ease(p/0.35)),206,5,C.amber,14);}
+  txt(ctx,'one event → every sink, concurrently',300,366,C.muted,MONO);
+  txt(ctx,'Lynx stores nothing — write your own: async __call__(event)',300,398,C.faint,MONO);
+}
+
+/* ============================================================
+   VISUAL 13 — MCP proxy (client → Lynx → server, zero code change)
+   ============================================================ */
+function vMcp(ctx,t){
+  const y=200, cli={x:24,c:84}, lx={x:234,c:294}, srv={x:444,c:509};
+  const dur=4,scen=Math.floor(t/dur)%3,p=(t%dur)/dur, deny=scen===2;
+  arrow(ctx,144,y,lx.x,y,C.line,.5,1.6);
+  arrow(ctx,lx.x+120,y,srv.x,y,C.line,.5,1.6);
+  box(ctx,cli.x,y-30,120,60,'MCP client','Cursor · Claude',C.line,0);
+  const gateHot=p>0.15&&p<(deny?0.55:0.8);
+  box(ctx,lx.x,y-30,120,60,'Lynx proxy','evaluate→mediate',C.amber,gateHot?18:10);
+  box(ctx,srv.x,y-30,130,60,'MCP server','upstream tools',deny?C.line:C.green,0);
+  let px,py=y,col=C.blue;
+  if(deny){
+    if(p<0.28){px=lerp(cli.c,lx.c,ease(p/0.28));}
+    else{px=lerp(lx.c,cli.c,ease(clamp((p-0.28)/0.4,0,1)));py=y+18;col=C.red;}
+  }else{
+    if(p<0.25){px=lerp(cli.c,lx.c,ease(p/0.25));}
+    else if(p<0.5){px=lerp(lx.c,srv.c,ease((p-0.25)/0.25));}
+    else if(p<0.75){px=lerp(srv.c,lx.c,ease((p-0.5)/0.25));py=y+18;col=C.green;}
+    else{px=lerp(lx.c,cli.c,ease((p-0.75)/0.25));py=y+18;col=C.green;}
+  }
+  dot(ctx,px,py,6,col,18);
+  if(deny&&p>0.28){ctx.save();ctx.strokeStyle=C.red;ctx.lineWidth=3;
+    ctx.beginPath();ctx.moveTo(lx.c-8,y+40);ctx.lineTo(lx.c+8,y+56);ctx.moveTo(lx.c+8,y+40);ctx.lineTo(lx.c-8,y+56);ctx.stroke();ctx.restore();
+    txt(ctx,'[denied]',lx.c,y+72,C.red,MONO);}
+  txt(ctx,'call_tool',lx.c,y-44,C.faint,MONO);
+  txt(ctx, deny?'a denied call never reaches the server'
+               :'every call_tool flows through evaluate → mediate',
+       300,352, deny?C.red:C.muted, MONO);
+  txt(ctx,'the client points at Lynx instead of the server — zero code change',300,392,C.faint,MONO);
+}
+
+/* ============================================================
+   VISUAL 14 — multi-provider (one policy, any model)
+   ============================================================ */
+function vProvider(ctx,t){
+  const provs=[{n:'Claude',s:'Anthropic',c:C.amber},{n:'GPT-4o',s:'OpenAI',c:C.green},
+               {n:'Grok',s:'xAI',c:C.blue},{n:'Mistral',s:'Mistral',c:C.violet},
+               {n:'DeepSeek',s:'DeepSeek',c:C.blue},{n:'Ollama',s:'local',c:C.green}];
+  // one clock drives everything: the dot travels kernel→socket each cycle and its
+  // ARRIVAL (lp=arriveT) is the swap — so the dot landing and the model changing coincide.
+  const n=provs.length,dur=2.0,cyc=t/dur,idx=Math.floor(cyc)%n,lp=cyc%1;
+  const arriveT=0.46, prevIdx=(idx-1+n)%n, P=provs[idx], PV=provs[prevIdx];
+  // kernel — run_agent(policy=…); the policy lives here and stays put while the model swaps
+  box(ctx,46,150,196,84,'run_agent','+ policy.yaml',C.amber,12);
+  // the same policy governs every model (the thesis of this section) — plain text, no border
+  txt(ctx,'✓ same policy · never changes',144,260,C.green,MONO);
+  // fixed model socket (a port the adapter plugs into)
+  ctx.save();ctx.strokeStyle=C.line;ctx.setLineDash([5,5]);ctx.lineWidth=1.6;
+  rr(ctx,360,148,202,88,12);ctx.stroke();ctx.setLineDash([]);ctx.restore();
+  txt(ctx,'model adapter — hot-swappable',461,136,C.faint,MONO);
+  ctx.strokeStyle=C.line;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(242,192);ctx.lineTo(360,192);ctx.stroke();
+  // seat helper — draw an adapter card scaled/faded at the socket
+  const seat=(prov,alpha,scale)=>{const cx=461,cy=192;ctx.save();ctx.globalAlpha=alpha;
+    ctx.translate(cx,cy);ctx.scale(scale,scale);ctx.translate(-cx,-cy);
+    box(ctx,374,164,174,58,prov.n,'adapter — '+prov.s,prov.c,16);ctx.restore();};
+  // previous model stays seated until the dot lands, then cross-fades out as the new one pops in
+  const prevA=1-clamp((lp-arriveT)/0.10,0,1);
+  if(prevA>0.02)seat(PV,prevA,1);
+  const np=clamp((lp-arriveT)/0.16,0,1);
+  if(np>0)seat(P,ease(np),lerp(.86,1,ease(np)));
+  // landing pulse exactly when the dot arrives
+  if(lp>arriveT-0.02&&lp<arriveT+0.18){const rp=clamp((lp-(arriveT-0.02))/0.20,0,1);
+    ctx.save();ctx.globalAlpha=(1-rp)*0.8;ctx.strokeStyle=P.c;ctx.lineWidth=2;
+    ctx.beginPath();ctx.arc(461,192,8+rp*30,0,7);ctx.stroke();ctx.restore();}
+  // delivery dot: kernel → socket during lp[0,arriveT]; delivered (gone) after it lands
+  if(lp<arriveT)dot(ctx,lerp(242,360,ease(lp/arriveT)),192,4,C.blue,10);
+  // chips highlight whatever is actually seated right now (matches the card)
+  const shownIdx=lp<arriveT?prevIdx:idx;
+  const cw=88,cg=6,total=n*cw+(n-1)*cg,sx=(600-total)/2;
+  provs.forEach((Q,i)=>{const x=sx+i*(cw+cg),act=i===shownIdx;
+    ctx.save();ctx.fillStyle=act?'rgba(245,166,35,.16)':'rgba(255,255,255,.03)';
+    ctx.strokeStyle=act?Q.c:C.line;ctx.lineWidth=1.4;rr(ctx,x,304,cw,30,7);ctx.fill();ctx.stroke();
+    txt(ctx,Q.n,x+cw/2,320,act?C.ink:C.muted,MONO);ctx.restore();});
+  txt(ctx,'swap the adapter — run_agent(...) and the policy never change',300,372,C.muted,MONO);
+}
+
+/* ============================================================
+   VISUAL 15 — framework-native governance (ToolGuard)
+   ============================================================ */
+function vToolGuard(ctx,t){
+  const fc={x:106,y:192}, gc={x:310,y:192}, tc={x:502,y:192};
+  const dur=3.2,scen=Math.floor(t/dur)%3,p=(t%dur)/dur;
+  const VR=[{k:'allow',c:C.green},{k:'transform',c:C.violet},{k:'deny',c:C.red}][scen];
+  const deny=VR.k==='deny';
+  // framework self-loop — it OWNS the loop (the inverse of the adapter mode)
+  ctx.save();ctx.strokeStyle=C.line;ctx.lineWidth=2;ctx.beginPath();ctx.arc(fc.x,114,26,0,7);ctx.stroke();ctx.restore();
+  const la=(t*1.7)%(Math.PI*2);
+  dot(ctx,fc.x+Math.cos(la)*26,114+Math.sin(la)*26,3.5,C.blue,8);
+  txt(ctx,'drives the loop',fc.x,76,C.faint,MONO);
+  // connectors
+  arrow(ctx,184,192,244,192,C.line,.5,1.6);
+  arrow(ctx,376,192,432,192,C.line,.5,1.6);
+  // boxes
+  box(ctx,28,150,156,84,'your framework','LangChain · CrewAI',C.line,0);
+  const checking=p>0.2&&p<0.45;
+  box(ctx,244,160,132,64,'ToolGuard','guard.check()',C.amber,checking?18:10);
+  box(ctx,432,160,140,64,'tool', deny?'blocked':(p>0.5?'runs ✓':''), deny?C.line:(p>0.5?VR.c:C.line),0);
+  txt(ctx,'a tool call',gc.x,148,C.faint,MONO);
+  // verdict chip under the guard
+  if(p>0.3){ctx.save();ctx.fillStyle='rgba(255,255,255,.04)';ctx.strokeStyle=VR.c;ctx.lineWidth=1.4;
+    rr(ctx,250,244,120,28,7);ctx.fill();ctx.stroke();txt(ctx,'→ '+VR.k,310,258,VR.c,MONO);ctx.restore();}
+  // packet: framework → guard (check) → tool (allow/transform) or back to framework (deny)
+  let px,py=192,col=C.blue;
+  if(p<0.22){px=lerp(fc.x,gc.x,ease(p/0.22));}
+  else if(p<0.45){px=gc.x;}
+  else if(deny){px=lerp(gc.x,fc.x,ease(clamp((p-0.45)/0.42,0,1)));col=C.red;}
+  else if(p<0.7){px=lerp(gc.x,tc.x,ease((p-0.45)/0.25));col=VR.c;}
+  else{px=lerp(tc.x,fc.x,ease(clamp((p-0.7)/0.3,0,1)));col=VR.c;}
+  dot(ctx,px,py,6,col,18);
+  txt(ctx,'your framework owns the loop — Lynx governs each call inside it',300,348,C.muted,MONO);
+  txt(ctx,'await guard.check(name, args) → GovernedCall · all five verdicts',300,392,C.faint,MONO);
+}
+
+/* ========================= hero (Three.js / WebGL) ========================= */
+function initHero(){
+  const canvas=document.getElementById('hero-canvas');
+  if(!window.__three_ok||typeof THREE==='undefined'){return heroFallback(canvas);}
+  let renderer;
+  try{renderer=new THREE.WebGLRenderer({canvas,alpha:true,antialias:true});}
+  catch(e){return heroFallback(canvas);}
+  const scene=new THREE.Scene();
+  const cam=new THREE.PerspectiveCamera(55,1,0.1,100);cam.position.z=4.2;
+  function resize(){const w=canvas.clientWidth,h=canvas.clientHeight;
+    renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setSize(w,h,false);
+    cam.aspect=w/h;cam.updateProjectionMatrix();}
+  // kernel: glowing wireframe icosahedron
+  const ico=new THREE.IcosahedronGeometry(1.35,1);
+  const wire=new THREE.LineSegments(new THREE.WireframeGeometry(ico),
+    new THREE.LineBasicMaterial({color:0xf5a623,transparent:true,opacity:.55}));
+  scene.add(wire);
+  const core=new THREE.Mesh(new THREE.IcosahedronGeometry(1.3,1),
+    new THREE.MeshBasicMaterial({color:0x161a21,transparent:true,opacity:.6}));
+  scene.add(core);
+  // particle field (tool calls orbiting)
+  const N=420,pos=new Float32Array(N*3);
+  for(let i=0;i<N;i++){const r=2.0+Math.random()*1.8,th=Math.random()*Math.PI*2,ph=Math.acos(2*Math.random()-1);
+    pos[i*3]=r*Math.sin(ph)*Math.cos(th);pos[i*3+1]=r*Math.sin(ph)*Math.sin(th);pos[i*3+2]=r*Math.cos(ph);}
+  const pg=new THREE.BufferGeometry();pg.setAttribute('position',new THREE.BufferAttribute(pos,3));
+  const pts=new THREE.Points(pg,new THREE.PointsMaterial({color:0x5cc8ff,size:0.035,transparent:true,opacity:.85,blending:THREE.AdditiveBlending}));
+  scene.add(pts);
+  // a few amber satellites
+  const sats=[];for(let i=0;i<5;i++){const m=new THREE.Mesh(new THREE.SphereGeometry(0.05,12,12),
+    new THREE.MeshBasicMaterial({color:0xffd27a}));scene.add(m);sats.push({m,r:1.8+i*0.18,sp:0.4+i*0.12,ph:i*1.3});}
+  resize();window.addEventListener('resize',resize);
+  function tick(now){const ti=now*0.001;
+    wire.rotation.y=ti*0.28;wire.rotation.x=ti*0.12;core.rotation.y=ti*0.28;core.rotation.x=ti*0.12;
+    pts.rotation.y=-ti*0.06;pts.rotation.x=ti*0.03;
+    sats.forEach(s=>{s.m.position.set(Math.cos(ti*s.sp+s.ph)*s.r,Math.sin(ti*s.sp*0.8+s.ph)*s.r*0.5,Math.sin(ti*s.sp+s.ph)*s.r);});
+    renderer.render(scene,cam);requestAnimationFrame(tick);}
+  requestAnimationFrame(tick);
+}
+function heroFallback(canvas){
+  // 2D particle-network fallback if WebGL/Three unavailable
+  const ctx=canvas.getContext('2d');let W,H;
+  function rs(){const dpr=Math.min(devicePixelRatio,2);W=canvas.clientWidth;H=canvas.clientHeight;
+    canvas.width=W*dpr;canvas.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);}
+  rs();window.addEventListener('resize',rs);
+  const P=[];for(let i=0;i<70;i++)P.push({x:Math.random(),y:Math.random(),
+    vx:(Math.random()-.5)*0.0006,vy:(Math.random()-.5)*0.0006});
+  function tick(){ctx.clearRect(0,0,W,H);
+    for(const p of P){p.x+=p.vx;p.y+=p.vy;if(p.x<0||p.x>1)p.vx*=-1;if(p.y<0||p.y>1)p.vy*=-1;}
+    for(let i=0;i<P.length;i++)for(let j=i+1;j<P.length;j++){
+      const dx=(P[i].x-P[j].x)*W,dy=(P[i].y-P[j].y)*H,d=Math.hypot(dx,dy);
+      if(d<120){ctx.strokeStyle=`rgba(92,200,255,${(1-d/120)*0.25})`;ctx.lineWidth=1;
+        ctx.beginPath();ctx.moveTo(P[i].x*W,P[i].y*H);ctx.lineTo(P[j].x*W,P[j].y*H);ctx.stroke();}}
+    for(const p of P){ctx.fillStyle='#f5a623';ctx.globalAlpha=.8;
+      ctx.beginPath();ctx.arc(p.x*W,p.y*H,1.8,0,7);ctx.fill();}
+    ctx.globalAlpha=1;requestAnimationFrame(tick);}
+  tick();
+}
+
+/* ========================= boot ========================= */
+window.addEventListener('load',()=>{
+  mount('c-loop',vLoop);
+  mount('c-verdicts',vVerdicts);
+  mount('c-oblig',vOblig);
+  mount('c-layers',vLayers);
+  mount('c-budget',vBudget);
+  mount('c-durable',vDurable);
+  mount('c-audit',vAudit);
+  mount('c-exec',vExec);
+  mount('c-compress',vCompress);
+  mount('c-graph',vGraph);
+  mount('c-approve',vApprove);
+  mount('c-sinks',vSinks);
+  mount('c-mcp',vMcp);
+  mount('c-provider',vProvider);
+  mount('c-toolguard',vToolGuard);
+  anims.forEach(sizeOne);
+  requestAnimationFrame(frame);
+  initHero();
+});
+</script>
+</body>
+</html>
