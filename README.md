@@ -9,6 +9,13 @@
 
 Pure functions over immutable values. No database. No globals. No leaks. Five verdicts. Streaming events to user-owned sinks.
 
+**Lynx is the governance and safety layer for your agent's loop — not the loop itself.** Every iteration of an agent loop proposes a tool call; Lynx checks each one (`allow / deny / dry_run / approve_required / transform`), audits it, and keeps the loop bounded — *before* it touches the real world. It is not an agent framework and won't write your loop's logic. Use it two ways:
+
+- **Bring your own harness** (OpenAI Agents SDK, LangChain, CrewAI, PydanticAI) and drop `ToolGuard` into its tool calls — the framework drives the loop, Lynx governs each action inside it.
+- **Or use `run_agent`** as a minimal, stateless loop of your own.
+
+Either way you get the same five-verdict policy boundary on every action, plus the loop-control rails a harness needs: **budgets** (step/token/duration caps), a **kill-switch**, a **repetition gate** (breaks same-tool-same-args infinite loops), and **durable resume** (a crash mid-loop replays completed steps without re-running side effects).
+
 ```python
 import asyncio
 from lynx import (
@@ -59,7 +66,7 @@ result = await run_agent(
 - **Handoff graphs** *(optional)*. Sequential multi-agent workflows where **the edge is a permission boundary**: each node is one `run_agent` call with its own policy/tools/budget, and edges route on outcomes — including **denial counts**. Bounded by construction (`max_transitions`), explicit context passing, YAML-declarable, durable via the same `RunStore`. Just sugar over a loop of `run_agent` calls — skip it and write the loop yourself anytime.
 - **MCP proxy** *(optional)*. Put Lynx *in front of* any MCP server: the client (Claude Desktop/Code, Cursor, …) points at Lynx instead of the server, and every `call_tool` flows through the same `evaluate → mediate` path — `allow / deny / dry_run / approve_required / transform` — with an audit stream, **zero code change** on client or server. `serve_mcp_proxy(upstream, policy=…, sinks=…)` wires the stdio transport; `GovernedProxy` / `govern_call` are the transport-free, unit-testable core. See example 34. *(`pip install lynx-agent[mcp]`.)*
 - **Framework-native governance** *(optional)*. When an agent *framework* owns the loop (OpenAI Agents SDK, LangChain, CrewAI, PydanticAI) instead of Lynx, drop a `ToolGuard` in front of its tool calls — `await guard.check(tool_name, args)` runs the same `evaluate → mediate` kernel and returns a `GovernedCall`, so all five verdicts work at the boundary with no proxy and no rewrite. This is the inverse of an **adapter** (`lynx.adapters`, where Lynx drives the loop): here the framework drives, Lynx governs each call inside it. `governed_function_tools(tools, policy=…)` turns a `ToolSet` into governed OpenAI Agents SDK tools in one line. See example 40. *(`pip install lynx-agent[openai-agents]` for the SDK shim; `ToolGuard` itself is stdlib-only.)*
-- **Operability controls.** A kill-switch (`cancel=CancelToken()`) checked at every step boundary and before each tool runs — a cancelled run stops after at most one more action. Plus a repetition gate (`Budget(max_repeated_calls=)`) for same-tool-same-args loops, and per-step / per-tool timeouts.
+- **Loop control & operability.** The rails that keep an agent loop bounded: a kill-switch (`cancel=CancelToken()`) checked at every step boundary and before each tool runs — a cancelled run stops after at most one more action; a repetition gate (`Budget(max_repeated_calls=)`) that breaks same-tool-same-args infinite loops; hard `Budget` caps (steps / tokens / duration); and per-step / per-tool timeouts.
 
 ## What Lynx does NOT do
 
