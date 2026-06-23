@@ -7,6 +7,20 @@ All notable changes to Lynx will be documented here. Format follows [Keep a Chan
 ### Added
 - (nothing yet)
 
+## [2.11.1] — 2026-06-23
+
+Docs / website only — no library code changed.
+
+### Added
+- **Complete CLI reference** (`docs/cli.md`) covering every `lynx` subcommand.
+- **Obligations example** (`examples/41_obligations.py`) demonstrating
+  `pre`/`post` obligations on a verdict (the 2.11.0 feature).
+- **Project website** published at [lynxharness.com](https://lynxharness.com)
+  (`index.html`, `CNAME`) via GitHub Pages.
+
+### Changed
+- README: website link, hero GitHub link, contact email; docs cross-links.
+
 ## [2.11.0] — 2026-06-22
 
 ### Added

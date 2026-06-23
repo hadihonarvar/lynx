@@ -1,7 +1,7 @@
 # Lynx
 
-[![PyPI](https://img.shields.io/pypi/v/lynx-agent.svg?v=2.11.0)](https://pypi.org/project/lynx-agent/)
-[![Python versions](https://img.shields.io/pypi/pyversions/lynx-agent.svg?v=2.11.0)](https://pypi.org/project/lynx-agent/)
+[![PyPI](https://img.shields.io/pypi/v/lynx-agent.svg?v=2.11.1)](https://pypi.org/project/lynx-agent/)
+[![Python versions](https://img.shields.io/pypi/pyversions/lynx-agent.svg?v=2.11.1)](https://pypi.org/project/lynx-agent/)
 [![License](https://img.shields.io/pypi/l/lynx-agent.svg)](https://github.com/hadihonarvar/lynx/blob/main/LICENSE)
 [![CI](https://github.com/hadihonarvar/lynx/actions/workflows/ci.yml/badge.svg)](https://github.com/hadihonarvar/lynx/actions/workflows/ci.yml)
 [![Website](https://img.shields.io/badge/website-lynxharness.com-f5a623)](https://lynxharness.com)
