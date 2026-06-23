@@ -38,9 +38,9 @@
     --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif;
   }
   * { box-sizing: border-box; }
-  html { scroll-behavior: smooth; }
+  html { scroll-behavior: smooth; overflow-x: hidden; }
   body {
-    margin: 0; background: var(--bg); color: var(--ink);
+    margin: 0; background: var(--bg); color: var(--ink); overflow-x: hidden;
     font-family: var(--sans); line-height: 1.6;
     -webkit-font-smoothing: antialiased;
   }
@@ -121,7 +121,12 @@
   .node.gate { border-color: rgba(245,166,35,.5); box-shadow: 0 0 0 1px rgba(245,166,35,.14), 0 8px 30px rgba(245,166,35,.08); background: linear-gradient(180deg, rgba(245,166,35,.07), var(--panel)); }
   .node.gate .lbl { color: var(--accent); }
   .arrow { align-self:center; color: var(--faint); font-size:20px; }
-  @media (max-width:640px){ .arrow { transform: rotate(90deg); } }
+  @media (max-width:640px){
+    /* stack the loop diagram vertically so 4 nodes don't force the page wide */
+    .looprow { flex-direction:column; align-items:stretch; }
+    .node { min-width:0; width:100%; flex:0 0 auto; }
+    .arrow { transform: rotate(90deg); }
+  }
 
   /* verdict cards */
   .grid { display:grid; gap:16px; margin-top:36px; }
@@ -184,6 +189,10 @@
   /* ---- animated feature rows ---- */
   .feature{padding:74px 0;border-top:1px solid var(--line)}
   .feature .wrap{display:grid;grid-template-columns:0.92fr 1.08fr;gap:54px;align-items:center}
+  /* grid items default to min-width:auto, so the white-space:pre code snippet
+     forces the column wider than a phone screen — let them shrink instead */
+  .feature .wrap > *{min-width:0}
+  .snip,.visual canvas{max-width:100%}
   @media(max-width:860px){ .feature .wrap{grid-template-columns:1fr;gap:26px} }
   .feature .kicker{display:flex;align-items:center;gap:10px}
   .feature .kicker .num{font-family:var(--mono);color:var(--faint);font-weight:600}
@@ -215,7 +224,8 @@
   @media(max-width:600px){
     header.hero{min-height:auto;padding:64px 0 44px}
     .feature{padding:52px 0}
-    .snip{font-size:11.5px}
+    /* wrap long code lines instead of letting white-space:pre force the page wide */
+    .snip{font-size:11.5px;white-space:pre-wrap;overflow-wrap:anywhere}
     .wrap{padding:0 18px}
   }
 </style>
