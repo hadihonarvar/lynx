@@ -4,8 +4,11 @@
 [![Python versions](https://img.shields.io/pypi/pyversions/lynx-agent.svg?v=2.11.0)](https://pypi.org/project/lynx-agent/)
 [![License](https://img.shields.io/pypi/l/lynx-agent.svg)](https://github.com/hadihonarvar/lynx/blob/main/LICENSE)
 [![CI](https://github.com/hadihonarvar/lynx/actions/workflows/ci.yml/badge.svg)](https://github.com/hadihonarvar/lynx/actions/workflows/ci.yml)
+[![Website](https://img.shields.io/badge/website-lynxharness.com-f5a623)](https://lynxharness.com)
 
 **A stateless, type-safe policy kernel for AI agent tool calls.**
+
+🌐 **Website (interactive feature tour): [lynxharness.com](https://lynxharness.com)**
 
 Pure functions over immutable values. No database. No globals. No leaks. Five verdicts. Streaming events to user-owned sinks.
 
@@ -716,8 +719,9 @@ ToolSet, or with an agent that isn't a pure function of the conversation
 | 38 | [`38_otel_audit.py`](examples/38_otel_audit.py) | OpenTelemetry audit sink |
 | 39 | [`39_layered_policy.py`](examples/39_layered_policy.py) | Layered policy scopes + combiners |
 | 40 | [`40_framework_native_governance.py`](examples/40_framework_native_governance.py) | `ToolGuard` — govern a framework's tool calls |
+| 41 | [`41_obligations.py`](examples/41_obligations.py) | Obligations — `pre` gate (fail-closed) + `post` notify on any verdict |
 
-All 40 with one-line descriptions: [`examples/README.md`](examples/README.md).
+All 41 with one-line descriptions: [`examples/README.md`](examples/README.md).
 
 ## CLI — seven commands
 
